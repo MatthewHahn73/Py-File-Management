@@ -155,6 +155,30 @@ class FileEncryption():
                 except Exception as General_Exception:
                     logging.error(General_Exception)
 
+            elif(Path.lower().endswith((".txt"))):      #File to decrypt is a .txt
+                try:
+                    logging.info("Reading in data ...")   if Verbose else None
+                    with open(Path, "rb") as File:
+                        if self.Determine_Text_Encryption(File.read()):
+                            raise ValueError("File '" + pathlib.PurePath(Path).name + "' is already encrypted")
+                    with open(Path, "r") as File:
+                        Text_Data = File.read()
+                        Text_Data_Formatted = Text_Data.encode('utf-8')
+                    with open(Path, "wb") as File:
+                        logging.info("Encrypting file ...")   if Verbose else None
+                        Cipher_Object = AES.new(self.AES_Key, AES.MODE_EAX)
+                        Cipher_Text, Tag = Cipher_Object.encrypt_and_digest(Text_Data_Formatted)
+                        [ File.write(x) for x in (Cipher_Object.nonce, Tag, Cipher_Text) ]
+                except IOError:
+                    File_Split = pathlib.PurePath(Path)
+                    logging.error("IOError opening " + "'~\\" + str(File_Split.parent.name) + "\\" + str(File_Split.name) + "'")
+                except UnicodeDecodeError as Unicode_Exception:
+                    logging.error(Unicode_Exception)
+                except ValueError as Value_Error:
+                    logging.error(Value_Error)
+                except Exception as General_Exception:
+                    logging.error(General_Exception)
+
             elif(Path.lower().endswith(".pdf")):  #File to encrypt is a .pdf
                 try:
                     logging.info("Reading in data ...")  if Verbose else None
@@ -197,6 +221,35 @@ class FileEncryption():
                         Raw = (Cipher_Object.decrypt_and_verify(CipherText, Tag))
                         JSON_Data = json.loads(Raw.decode("utf8"))
                         json.dump(JSON_Data, File)
+                    if(Open):                               #Open the file if applicable
+                        logging.info("Opening file ...") if Verbose else None
+                        self.Open_App_Crossplatform(Path)
+                except IOError:
+                    File_Split = pathlib.PurePath(Path)
+                    logging.error("IOError opening " + "'~\\" + str(File_Split.parent.name) + "\\" + str(File_Split.name) + "'")
+                except UnicodeDecodeError as Unicode_Exception:
+                    logging.error(Unicode_Exception)
+                except ValueError as Value_Error:
+                    logging.error(Value_Error)
+                except Exception as General_Exception:
+                    logging.error(General_Exception)
+
+            elif(Path.lower().endswith((".txt"))):      #File to decrypt is a .txt
+                try:
+                    logging.info("Reading in data ...") if Verbose else None
+                    with open(Path, "rb") as File:
+                        if not self.Determine_Text_Encryption(File.read()):
+                            raise ValueError("File '" + pathlib.PurePath(Path).name + "' is already decrypted")
+                    logging.info("Validating key ...") if Verbose else None
+                    if self.Validate_Key(Path) == -1:
+                        raise Exception('Invalid encryption key')
+                    with open(Path, "rb") as File:
+                        Nonce, Tag, CipherText = [File.read(x) for x in (16, 16, -1)]
+                    with open(Path, "w") as File:
+                        logging.info("Decrypting file ...") if Verbose else None
+                        Cipher_Object = AES.new(self.AES_Key, AES.MODE_EAX, Nonce)
+                        Raw = (Cipher_Object.decrypt_and_verify(CipherText, Tag)).decode("utf8")
+                        File.write(Raw)
                     if(Open):                               #Open the file if applicable
                         logging.info("Opening file ...") if Verbose else None
                         self.Open_App_Crossplatform(Path)

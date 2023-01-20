@@ -1,0 +1,2 @@
+Restore/Backup SD Card - https://sourceforge.net/projects/win32diskimager/
+Flash Image to SD Card - https://www.raspberrypi.com/software/

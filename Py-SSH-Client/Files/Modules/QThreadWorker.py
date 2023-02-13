@@ -1,6 +1,6 @@
 from PyQt5.QtCore import *
 
-class Q_Thread_Worker(QObject):
+class QThreadWorker(QObject):
     data = pyqtSignal(list)
     complete = pyqtSignal()
 
@@ -67,9 +67,9 @@ class Q_Thread_Worker(QObject):
             self.data.emit(list([e]))
             self.complete.emit()  
 
-    def Terminal_Instance(self):
+    def Run_Putty_Instance(self):
         try:
-            stdin, stdout, stderr = self.SSH_Object.Terminal_SSH(self.Host, self.Usr, self.Passwrd)
+            stdin, stdout, stderr = self.SSH_Object.Putty(self.Host, self.Usr, self.Passwrd)
             self.data.emit(list([stdin, stdout, stderr]))
             self.complete.emit()
         except Exception as e:

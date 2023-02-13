@@ -67,7 +67,7 @@ class FileEncryption():
                 Desired_Keyword_Pair = self.Determine_Potential_Key_Match(File_Text_List, Desired_Keyword_Formatted)
                 if Desired_Keyword_Pair:
                     if isinstance(Desired_Keyword_Pair["Values"], dict):       #Multiple Values
-                        LS = Desired_Keyword_Pair["Key"] + " had multiple values: "
+                        LS = Desired_Keyword_Pair["Key"] + " pair(s) found: "
                         for key, value in Desired_Keyword_Pair["Values"].items():
                             LS += ("[" + key + " - " + value + "] <> ")
                         logging.info(LS)
@@ -89,7 +89,7 @@ class FileEncryption():
                 for key, value in File_Text_List_Sorted.items():
                     Line_Icon = "└── " if list(File_Text_List_Sorted)[-1] == key else "├── "
                     print(Line_Icon + key.replace("`", "").replace("*", "").replace("'", ""))
-                print("1 file, " + str(len(File_Text_List_Sorted)) + " keyword(s)")
+                print("1 file, " + str(len(File_Text_List_Sorted)) + " field(s)")
         except Exception as General_Exception:
             logging.error(General_Exception)
             

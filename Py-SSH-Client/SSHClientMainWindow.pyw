@@ -2,19 +2,17 @@
 SSH Client for File Manager Server
 
 Current Bugs
-    -Implement zero change scenerios for send and fetch requests
-        -If no files exist in the origin directory, don't attempt the stfp connection and return an error
-    -Somtimes pinging the server will fail (timeout), even if server is up
-        -Related to module?
+    -Somtimes connections to server will timeout even if server is up
+        -Related to a module?
+        -Related to server firewall?
+        -Server restart will fix
 
 Future Features
-    -Run another backup of the server SD card
-        -Been a few updates since last update
+    -Give more detailed log information than just SSH logins when server log request is executed
     -Add in an option to allow for use of SSH certificates 
         -This will require some serious valiation checking on the client side to ensure the existing of the certs
         -Also require some validation on the server side to validate existance of certs on the server
         -Add in an option to create a cert pairing on the local machine
-    -Add in an option to clear the log using the right click context menu
     -Improve/Fix the SSH time log issue
         -Client will now automatically update server time for requests that require command line argument(s)
         -Doesn't update for SSH requests made outside the GUI client (Like mobile SSH)
@@ -59,7 +57,8 @@ Functionality
         -Request a single file from the storage directory located on the server
             -Server PATH doesn't have to be exact, will search entire given directory
         -Request all files from the given server directory
-        -Request a list of files located within the storage directory on the server
+        -Request a directory structure of the given server storage directory
+        -Request detailed information on server storage partitions
         -Request SSH log history from the server
     -Send 
         -Send a single file from the given local client storage directory to the given server directory
@@ -70,8 +69,6 @@ Functionality
             -This update happens automatically for most request types
         -Ping the server 
             -Pings 4 times; Gives min, max and averages of ping attempts
-    -Run 
-        -Open a command line 'Putty' terminal instance for a manual SSH session in another window
 """
 
 import sys
@@ -97,9 +94,10 @@ from paramiko.ssh_exception import \
     , AuthenticationException \
     , SSHException
 from Files.Modules import \
-    QTextEditLogger as QTEL \
+    QTextEditLoggerCustom as QTEL \
+    , QTextBrowserCustom as QCTB \
     , QThreadWorker as QTW \
-    , QCustomLineEdit as QCLE \
+    , QLineEditCustom as QCLE \
     , ParamikoClient as Client 
 
 #Regex
@@ -126,7 +124,7 @@ logger.setLevel(logging.DEBUG)
 logging.getLogger("paramiko").setLevel(logging.DEBUG)
 
 #Main window
-class SSH_Client_Main_Window(QMainWindow):
+class SSHClientMainWindow(QMainWindow):
     Paths_Window = None
     Keywords_Window = None
     SSH_Object = None
@@ -139,50 +137,43 @@ class SSH_Client_Main_Window(QMainWindow):
     REQUESTS = {
         "Request" : [
             "Values",
-            "Names",
-            "File (Single)",
-            "Files (All)",
+            "Fields",
+            "Single File",
+            "All Files",
             "File Tree",
+            "Disk Space",
             "Server Logs"
         ],
         "Send" : [
-            "File (Single)",
-            "Files (All)",
+            "Single File",
+            "All Files",
             "Datetime",
             "Ping"
-        ],
-        "Run" : [
-            "Terminal"
         ]
     }
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.SSH_Object = Client.Paramiko_Client()   
+        self.SSH_Object = Client.ParamikoClient()   
 
         #Menu Bar
         Menu = self.menuBar()
         Menu.setFont(Custom_Font)
         Menu.setStyleSheet(self.MENU_STYLESHEET)
-
+        
         #File
         File_Menu = Menu.addMenu('File')
         File_Menu.setFont(Custom_Font)
-        Save_Fields =  QAction('Save Settings', self)
+        Save_Fields = QAction('Save Settings', self)
         Save_Fields.setFont(Custom_Font)
         Save_Fields.setShortcut("Ctrl+S")
-        Clear_LogEdit =  QAction('Clear Logger', self)
-        Clear_LogEdit.setFont(Custom_Font)
-        Clear_LogEdit.setShortcut("Ctrl+L")
         Close_Action = QAction('Close', self)
         Close_Action.setFont(Custom_Font)
         File_Menu.addAction(Save_Fields)
-        File_Menu.addAction(Clear_LogEdit)
         File_Menu.addAction(Close_Action)
 
         #File Tab Actions
-        Save_Fields.triggered.connect(lambda: self.Save_Settings())
-        Clear_LogEdit.triggered.connect(lambda: self.Clear_Logs())
+        Save_Fields.triggered.connect(self.Clear_Logs_And_Save)
         Close_Action.triggered.connect(self.close)
 
         #Options
@@ -192,6 +183,10 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Toggle_Passwords_Menu_Option = QAction('Hide Passwords', self)
         self.Toggle_Passwords_Menu_Option.setFont(Custom_Font)
         self.Toggle_Passwords_Menu_Option.setCheckable(True)
+
+        self.Toggle_Copy_Menu_Option = QAction('Auto Copy', self)
+        self.Toggle_Copy_Menu_Option.setFont(Custom_Font)
+        self.Toggle_Copy_Menu_Option.setCheckable(True)
 
         Logger_Level_Menu_Option = Options_Menu.addMenu("Logging Level")
         Logger_Level_Menu_Option.setFont(Custom_Font)
@@ -213,6 +208,7 @@ class SSH_Client_Main_Window(QMainWindow):
         Logger_Level_Menu_Option.addAction(self.Logger_Level_Menu_Option_Debug)
 
         Options_Menu.addAction(self.Toggle_Passwords_Menu_Option)
+        Options_Menu.addAction(self.Toggle_Copy_Menu_Option)
         Options_Menu.addMenu(Logger_Level_Menu_Option)
 
         #Options Tab Actions
@@ -222,6 +218,7 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Logger_Level_Menu_Option_Info.triggered.connect(lambda: self.Toggle_Logging_Level("Info"))
         self.Logger_Level_Menu_Option_Debug.triggered.connect(lambda: self.Toggle_Logging_Level("Debug"))
 
+        """
         #Views
         View_Menu = Menu.addMenu("View")
         View_Menu.setFont(Custom_Font)
@@ -234,10 +231,11 @@ class SSH_Client_Main_Window(QMainWindow):
 
         #View Tab Actions
         self.Toggle_FullScreen_Option.triggered.connect(lambda: self.Toggle_Fullscreen())
+        """
 
         #Keyboard Binds
         self.shortcut = QShortcut(QKeySequence("Return"), self) 
-        self.shortcut.activated.connect(self.Fetch_Button)
+        self.shortcut.activated.connect(self.Execute_Button_Pressed)
         
         #Layout
         self.Layout = QGridLayout()
@@ -278,7 +276,7 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Keyword_Input = QLineEdit(self)
         self.Keyword_Input.setFont(Custom_Font)
         self.Keyword_Input.setFixedHeight(25)
-        self.Keyword_Input.setPlaceholderText("Keyword")
+        self.Keyword_Input.setPlaceholderText("Field")
         self.Keyword_Input.setMaxLength(64)
         self.Key_Input = QLineEdit(self)
         self.Key_Input.setPlaceholderText("AES Key")
@@ -322,13 +320,12 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Request_Label.setText("Operation Type")
         self.Request_Label.setFixedHeight(25)
         self.Request_Label.setFont(Custom_Font)
-        Operation_Action_Combobox_Custom_LineEdit = QCLE.Q_Custom_LineEdit()
+        Operation_Action_Combobox_Custom_LineEdit = QCLE.QCustomLineEdit()
         Operation_Action_Combobox_Custom_LineEdit.focus_in_signal.connect(lambda: self.Toggle_Textbox_Dropdowns("Operation_Action_Combobox"))
         self.Operation_Action_Combobox = QComboBox()
         self.Operation_Action_Combobox.setFont(Custom_Font)    
         self.Operation_Action_Combobox.addItem("Request")
         self.Operation_Action_Combobox.addItem("Send")
-        self.Operation_Action_Combobox.addItem("Run")
         self.Operation_Action_Combobox.setFixedHeight(25)
         self.Operation_Action_Combobox.setFixedWidth(120)
         self.Operation_Action_Combobox.setEditable(True)
@@ -337,7 +334,7 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Operation_Action_Combobox.lineEdit().setAlignment(Qt.AlignCenter) 
         self.Operation_Action_Combobox.lineEdit().setFont(Custom_Font) 
         self.Operation_Action_Combobox.currentIndexChanged.connect(self.Operation_Action_Changed)
-        Operation_Combobox_Custom_LineEdit = QCLE.Q_Custom_LineEdit()
+        Operation_Combobox_Custom_LineEdit = QCLE.QCustomLineEdit()
         Operation_Combobox_Custom_LineEdit.focus_in_signal.connect(lambda: self.Toggle_Textbox_Dropdowns("Operation_Combobox"))
         self.Operation_Combobox = QComboBox()
         self.Operation_Combobox.setFont(Custom_Font)    
@@ -350,24 +347,30 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Operation_Combobox.lineEdit().setFont(Custom_Font) 
                                        
         #Buttons
-        self.Fetch = QPushButton("Execute", self)
-        self.Fetch.setFont(Custom_Font)
-        self.Fetch.setCheckable(False)
-        self.Fetch.setFixedHeight(25)
-        self.Fetch.setFixedWidth(120)
-        self.Fetch.clicked.connect(self.Fetch_Button)
-        self.Open = QPushButton("Storage", self)
-        self.Open.setFont(Custom_Font)
-        self.Open.setCheckable(False)
-        self.Open.setFixedHeight(25)
-        self.Open.setFixedWidth(120)
-        self.Open.clicked.connect(self.Open_Storage)
-        self.Close = QPushButton("Clear/Close", self)
-        self.Close.setFont(Custom_Font)
-        self.Close.setCheckable(False)
-        self.Close.setFixedHeight(25)
-        self.Close.setFixedWidth(120)
-        self.Close.clicked.connect(self.Clear_Close)
+        self.Open_Button = QPushButton("Open Storage", self)
+        self.Open_Button.setFont(Custom_Font)
+        self.Open_Button.setCheckable(False)
+        self.Open_Button.setFixedHeight(25)
+        self.Open_Button.setFixedWidth(120)
+        self.Open_Button.clicked.connect(self.Open_Storage)
+        self.Terminal_Button = QPushButton("Open Terminal", self)
+        self.Terminal_Button.setFont(Custom_Font)
+        self.Terminal_Button.setCheckable(False)
+        self.Terminal_Button.setFixedHeight(25)
+        self.Terminal_Button.setFixedWidth(120)
+        self.Terminal_Button.clicked.connect(self.Terminal_Button_Pressed)
+        self.Close_Button = QPushButton("Clear Clipboard && Close", self)
+        self.Close_Button.setFont(Custom_Font)
+        self.Close_Button.setCheckable(False)
+        self.Close_Button.setFixedHeight(25)
+        self.Close_Button.setFixedWidth(246)
+        self.Close_Button.clicked.connect(self.Clear_Close)
+        self.Execute_Button = QPushButton("Execute", self)
+        self.Execute_Button.setFont(Custom_Font)
+        self.Execute_Button.setCheckable(False)
+        self.Execute_Button.setFixedHeight(25)
+        self.Execute_Button.setFixedWidth(246)
+        self.Execute_Button.clicked.connect(self.Execute_Button_Pressed)
 
         #Set Bottom Stack
         self.Bottom_Stack = QGridLayout()
@@ -375,21 +378,22 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Inner_Combo_Stack.addWidget(self.Operation_Action_Combobox)
         self.Inner_Combo_Stack.addWidget(self.Operation_Combobox)
         self.Inner_Button_Stack = QHBoxLayout()
-        self.Inner_Button_Stack.addWidget(self.Fetch)
-        self.Inner_Button_Stack.addWidget(self.Close)
+        self.Inner_Button_Stack.addWidget(self.Open_Button)
+        self.Inner_Button_Stack.addWidget(self.Terminal_Button)
         self.Bottom_Stack.addWidget(self.Request_Label, 1, 1, alignment=Qt.AlignBottom)
         self.Bottom_Stack.addLayout(self.Inner_Combo_Stack, 2, 1, 1, 2, alignment=Qt.AlignLeft)
         self.Bottom_Stack.addLayout(self.Inner_Button_Stack, 3, 1, 1, 2, alignment=Qt.AlignLeft)
-        self.Bottom_Stack.addWidget(self.Open, 4, 1, 1, 2, alignment=Qt.AlignCenter)
+        self.Bottom_Stack.addWidget(self.Close_Button, 4, 1, 1, 2, alignment=Qt.AlignCenter)
+        self.Bottom_Stack.addWidget(self.Execute_Button, 5, 1, 1, 2, alignment=Qt.AlignCenter)
 
         #Set Left Grid
         self.LogLayout = QVBoxLayout()
-        self.LogEdit = QTextBrowser()
+        self.LogEdit = QCTB.QTextBrowserCustom()
         self.LogEdit.setOpenExternalLinks(True)
         self.LogEdit.setFont(Custom_Font_Small)
         self.LogEdit.setReadOnly(True)
         self.LogEdit.anchorClicked.connect(self.Copy_Or_Open_Link)
-        Handler = QTEL.Q_Text_Edit_Logger()
+        Handler = QTEL.QTextEditLoggerCustom()
         Handler.sigLog.connect(self.LogEdit.append)
         logger.addHandler(Handler)   
         self.LogLayout.addWidget(self.LogEdit)
@@ -409,8 +413,8 @@ class SSH_Client_Main_Window(QMainWindow):
         self.setWindowIcon(QIcon(Icon_Path))
             
         #Window Settings
-        self.setWindowTitle("File Manager SSH Client v1.80b")
-        self.setMinimumSize(526, 502)
+        self.setWindowTitle("File Manager SSH Client v1.81b")
+        self.setFixedSize(526, 533)
         widget = QWidget()
         widget.setLayout(self.MainLayout)
         self.setCentralWidget(widget)
@@ -480,6 +484,11 @@ class SSH_Client_Main_Window(QMainWindow):
                             self.Key_Input.setEchoMode(QLineEdit.Password)
                     else:
                         raise KeyError("Missing 'HidePasswords' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+
+                    if not (Settings['Options'].get('AutoCopy') is None):
+                        self.Toggle_Copy_Menu_Option.setChecked(Settings["Options"]["AutoCopy"])
+                    else:
+                        raise KeyError("Missing 'HidePasswords' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
                         
                     if not (Settings['Options'].get('LoggingLevel') is None):
                         self.Toggle_Logging_Level(Settings["Options"]["LoggingLevel"])
@@ -500,7 +509,6 @@ class SSH_Client_Main_Window(QMainWindow):
                     
     def Save_Settings(self):
         try:
-            self.Clear_Logs()
             Path = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Settings.json").replace("\\", "/")
             with open(Path, "w") as File:           #Read values and set file settings
                 Config = {
@@ -515,6 +523,7 @@ class SSH_Client_Main_Window(QMainWindow):
                     }, 
                     "Options" : {
                         "HidePasswords" : self.Toggle_Passwords_Menu_Option.isChecked(),
+                        "AutoCopy" : self.Toggle_Copy_Menu_Option.isChecked(),
                         "LoggingLevel" : self.Fetch_Logging_Level()
                     }
                 }       
@@ -532,19 +541,15 @@ class SSH_Client_Main_Window(QMainWindow):
                 self.Client_Storage_Path_Field.setCursorPosition(0)
         except Exception as E:
             logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
-            
-    def Validate_Minimum_Server_Input(self):
+                
+    def Validate_Server_Input(self, Full):  
         if not self.Server_Name.text():
-            return "Missing server name"
-        return "Success"
-    
-    def Validate_Server_Input(self):  
-        if not self.Server_Input.text():
-            return "Missing username"
-        if not self.Server_Name.text():
-            return "Missing server name"
-        if not self.Server_Password.text():
-            return "Missing server password"
+            return "Missing hostname"
+        if Full:
+            if not self.Server_Input.text():
+                return "Missing username"
+            if not self.Server_Password.text():
+                return "Missing user password"
         return "Success"
     
     def Validate_Minimum_File_Input(self):
@@ -552,13 +557,23 @@ class SSH_Client_Main_Window(QMainWindow):
             return "Missing file name"
         return "Success"
 
+    def Validate_Local_File_Input(self, Single):
+        if not self.File_Location.text():
+            return "Missing file name"
+        if len(os.listdir(self.Client_Storage_Path_Field.text())) <= 0:
+            return "Local storage path is empty"
+        if Single:
+            if not os.path.exists(self.Client_Storage_Path_Field.text() + self.File_Location.text()):
+                return "File does not exist in local storage path"
+        return "Success"
+
     def Validate_File_Input(self):
         if not self.File_Location.text():
             return "Missing file name"
         if not self.Keyword_Input.text():
-            return "Missing keyword"
+            return "Missing field name"
         if not self.Key_Input.text():
-            return "Missing key"
+            return "Missing AES key"
         if len(self.Key_Input.text()) != 16:
             return "Keys require 16 characters"
         return "Success"
@@ -576,16 +591,26 @@ class SSH_Client_Main_Window(QMainWindow):
         if(shutil.which("putty.exe")):     #Check for existance of putty installation
             return "Success"
         else:                              #If no install exists, notify user of how to install 
+            self.Clear_Logs()
             logging.warning("Putty was not found on the PATH")
             logging.info("Download it " + LINK_TEMPLATE.format(PUTTY_DOWNLOAD_LINK, "Here"))
-        
-    def Fetch_Button(self):
+
+    def Terminal_Button_Pressed(self):
+        DIV = self.Validate_Server_Input(Full=True)
+        if DIV == "Success":
+            PIV = self.Validate_Putty_Executable()
+            if PIV == "Success":
+                self.Open_Terminal_Instance()
+        else:
+            logging.warning(DIV)    
+
+    def Execute_Button_Pressed(self):
         self.Clear_Logs()
         Request_Type = self.Operation_Action_Combobox.currentIndex()
         Operation = self.Operation_Combobox.currentIndex()
-        if Request_Type == 0:         #Fetch Sever Request 
+        if Request_Type == 0:         #Fetch_Button Sever Request 
             if Operation == 0:        #Request Value
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
                     FIV = self.Validate_File_Input()
                     if FIV == "Success":
@@ -595,7 +620,7 @@ class SSH_Client_Main_Window(QMainWindow):
                 else:
                     logging.info(DIV)
             elif Operation == 1:      #Request List
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
                     FIV = self.Validate_List_Input()
                     if FIV == "Success":
@@ -605,7 +630,7 @@ class SSH_Client_Main_Window(QMainWindow):
                 else:
                     logging.info(DIV)
             elif Operation == 2:      #Request File
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
                     FIV = self.Validate_Minimum_File_Input()
                     if FIV == "Success":
@@ -615,7 +640,7 @@ class SSH_Client_Main_Window(QMainWindow):
                 else:
                     logging.info(DIV)
             elif Operation == 3:      #Request Entire Directory
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
                     FIV = self.Validate_Minimum_File_Input()
                     if FIV == "Success":
@@ -625,22 +650,28 @@ class SSH_Client_Main_Window(QMainWindow):
                 else:
                     logging.info(DIV)
             elif Operation == 4:      #Request File List
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
                     self.Connect_To_Server_Fetch_File_List()
                 else:
                     logging.info(DIV)
-            elif Operation == 5:      #Request Logs
-                DIV = self.Validate_Server_Input()
+            elif Operation == 5:      #Request Disk Info
+                DIV = self.Validate_Server_Input(Full=True)
+                if DIV == "Success":
+                    self.Connect_To_Server_Fetch_Disk_Info()
+                else:
+                    logging.info(DIV)
+            elif Operation == 6:      #Request Logs
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
                     self.Connect_To_Server_Fetch_SSH_Logs()
                 else:
                     logging.info(DIV)
         elif Request_Type == 1:       #Send to Server Request
             if Operation == 0:        #Send File
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_Minimum_File_Input()
+                    FIV = self.Validate_Local_File_Input(Single=True)
                     if FIV == "Success":
                         self.Connect_To_Server_Send_File("SendSingle")
                     else:
@@ -648,9 +679,9 @@ class SSH_Client_Main_Window(QMainWindow):
                 else:
                     logging.info(DIV)
             elif Operation == 1:      #Send Entire Directory
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_Minimum_File_Input()
+                    FIV = self.Validate_Local_File_Input(Single=False)
                     if FIV == "Success":
                         self.Connect_To_Server_Send_File("SendAll")
                     else:
@@ -658,12 +689,12 @@ class SSH_Client_Main_Window(QMainWindow):
                 else:
                     logging.info(DIV)
             elif Operation == 2:      #Update Server Time
-                DIV = self.Validate_Server_Input()
+                DIV = self.Validate_Server_Input(Full=True)
                 if DIV == "Success":
                     Command = "\n".join(
-                        [   "echo == Old Datetime ==",
+                        [   "echo Old",
                             "date",
-                            "echo == New Datetime ==",
+                            "echo New",
                             "sudo date --set='" + time.strftime("%m/%d/%Y %H:%M:%S", time.localtime()) + "'",
                         ]
                     )
@@ -671,23 +702,12 @@ class SSH_Client_Main_Window(QMainWindow):
                 else:
                     logging.info(DIV)
             elif Operation == 3:      #Ping Server
-                DIV = self.Validate_Minimum_Server_Input()
+                DIV = self.Validate_Server_Input(Full=False)
                 if DIV == "Success":
                     self.Connect_And_Ping_Server()
                 else:
                     logging.info(DIV)
-        elif Request_Type == 2:       #Run Software
-            if Operation == 0:        #Open Terminal
-                DIV = self.Validate_Server_Input()
-                if DIV == "Success":
-                    PIV = self.Validate_Putty_Executable()
-                    if PIV == "Success":
-                        self.Open_Terminal_Instance()
-                else:
-                    logging.info(DIV)
-            else:
-                logging.warning("Unknown fetch index: " + Operation)
-                
+                                    
     def Clear_Close(self):
         self.Clear_Clipboard()
         self.close()
@@ -698,9 +718,9 @@ class SSH_Client_Main_Window(QMainWindow):
     def Connect_To_Server_Generic_Request(self, Command):
         self.Button_Toggle(False)
         self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text() + " ...")
+        logging.info("Attempting SSH to " + self.Server_Name.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)                 
         self.PWorker.data.connect(self.Connect_To_Server_Generic_Results)
@@ -710,12 +730,12 @@ class SSH_Client_Main_Window(QMainWindow):
     def Connect_To_Server_Fetch_Value(self):
         self.Button_Toggle(False)
         self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text() + " ...")
+        logging.info("Attempting SSH to " + self.Server_Name.text())
         Keyword_Input_Argument = self.Keyword_Input.text().replace(" ", "<>")          #Filter keyword
         File_Location_Argument = self.File_Location.text().replace(" ", "<>")          #Filter location file
         Command = self.Append_Date_Update("./AutoRun.sh fetch '" + File_Location_Argument + "' '" + Keyword_Input_Argument + "' '" + self.Key_Input.text() + "'")
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)                 
         self.PWorker.data.connect(self.Print_SSH_Value_Results)
@@ -725,24 +745,37 @@ class SSH_Client_Main_Window(QMainWindow):
     def Connect_To_Server_Fetch_Keyword_List(self):
         self.Button_Toggle(False)
         self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text() + " ...")
+        logging.info("Attempting SSH to " + self.Server_Name.text())
         File_Location_Argument = self.File_Location.text().replace(" ", "<>")          #Filter location file
         Command = self.Append_Date_Update("./AutoRun.sh list '" + File_Location_Argument + "' 'placeholder' '" + self.Key_Input.text() + "'")
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)                 
         self.PWorker.data.connect(self.Connect_To_Server_Generic_Results)
+        self.PWorker.complete.connect(self.PThread.quit)
+        self.PThread.start()
+
+    def Connect_To_Server_Fetch_Disk_Info(self):
+        self.Button_Toggle(False)
+        self.Clear_Logs()
+        logging.info("Attempting SSH to " + self.Server_Name.text())
+        Command = self.Append_Date_Update("df -h")
+        self.PThread = QThread(self)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker.moveToThread(self.PThread)
+        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)              
+        self.PWorker.data.connect(self.Print_Disk_Info_Results)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
         
     def Connect_To_Server_Fetch_SSH_Logs(self):
         self.Button_Toggle(False)
         self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text() + " ...")
+        logging.info("Attempting SSH to " + self.Server_Name.text())
         Command = self.Append_Date_Update("cat /var/log/auth.log | grep 'Failed\|Accepted'")
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)              
         self.PWorker.data.connect(self.Print_SSH_Fetch_Log_Results)
@@ -752,9 +785,9 @@ class SSH_Client_Main_Window(QMainWindow):
     def Connect_To_Server_Fetch_File(self, Type):
         self.Button_Toggle(False)
         self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text() + " ...")
+        logging.info("Attempting SSH to " + self.Server_Name.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), self.Fetch_Server_Storage_Path(), self.Fetch_Client_Storage_Path(), F=self.File_Location.text(), T=Type)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), self.Fetch_Server_Storage_Path(), self.Fetch_Client_Storage_Path(), F=self.File_Location.text(), T=Type)
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Connect_And_Run_Server_Transfer)                 
         self.PWorker.data.connect(self.Print_SSH_Fetch_File_Results)
@@ -764,9 +797,9 @@ class SSH_Client_Main_Window(QMainWindow):
     def Connect_To_Server_Fetch_File_List(self):
         self.Button_Toggle(False)
         self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text() + " ...")
+        logging.info("Attempting SSH to " + self.Server_Name.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=("tree " + self.Fetch_Server_Storage_Path()))
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=("tree " + self.Fetch_Server_Storage_Path()))
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)             
         self.PWorker.data.connect(self.Connect_To_Server_Generic_Results)
@@ -776,9 +809,9 @@ class SSH_Client_Main_Window(QMainWindow):
     def Connect_To_Server_Send_File(self, Type):
         self.Button_Toggle(False)
         self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text() + " ...")
+        logging.info("Attempting SSH to " + self.Server_Name.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), self.Fetch_Server_Storage_Path(), self.Fetch_Client_Storage_Path(), F=self.File_Location.text(), T=Type)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), self.Fetch_Server_Storage_Path(), self.Fetch_Client_Storage_Path(), F=self.File_Location.text(), T=Type)
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Connect_And_Run_Server_Transfer)               
         self.PWorker.data.connect(self.Print_SSH_Send_File_Results)
@@ -791,7 +824,7 @@ class SSH_Client_Main_Window(QMainWindow):
         Host = self.Server_Name.text()
         logging.info("Attempting to ping " + Host + " ...")
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, Host)
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, Host)
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.Ping_Server)
         self.PWorker.data.connect(self.Print_Ping_Results)
@@ -802,9 +835,9 @@ class SSH_Client_Main_Window(QMainWindow):
         self.Button_Toggle(False)
         self.Clear_Logs()
         self.PThread = QThread(self)
-        self.PWorker = QTW.Q_Thread_Worker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text())
+        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text())
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Terminal_Instance)
+        self.PThread.started.connect(self.PWorker.Run_Putty_Instance)
         self.PWorker.data.connect(self.Print_Putty_Opening_Results)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
@@ -834,7 +867,7 @@ class SSH_Client_Main_Window(QMainWindow):
             elif URL_String[0] == '#':                         #Value is a string
                 pyperclip.copy(URL_String[1:])     
             else:                                              #Value is invalid/unknown
-                raise Exception("Unknown value passed to 'Copy_Or_Open_Link' method")   
+                raise Exception("Invalid value passed to 'Copy_Or_Open_Link' method")   
         except Exception as E:
             logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
 
@@ -843,10 +876,10 @@ class SSH_Client_Main_Window(QMainWindow):
         try:
             if not self.Includes_Errors(params):                 #If no errors were thrown 
                 stdoutstring, stderrstring = self.Format_Lists(params[1], params[2])
-                logging.info("=== Server Response Begin ===")   
-                for i in stdoutstring:                           #Output output response
+                logging.debug("=== Server Response Begin ===")   
+                for i in stdoutstring:                           #Output server response
                     if i != " ":
-                        logging.info(self.Format_Response(i))
+                        logging.debug(self.Format_Response(i))
                 for j in stderrstring:                           #Output server side error(s) (if any)
                     if j != " ":
                         if(j.__contains__("INFO:root")):
@@ -855,7 +888,7 @@ class SSH_Client_Main_Window(QMainWindow):
                             logging.warning(self.Format_Response(j))
                         elif(j.__contains__("ERROR:root")):
                             logging.error(self.Format_Response(j))
-                logging.info("=== Server Response End ===")  
+                logging.debug("=== Server Response End ===")  
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                 logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
@@ -871,13 +904,13 @@ class SSH_Client_Main_Window(QMainWindow):
                 stdoutstring, stderrstring = self.Format_Lists(params[1], params[2])
                 Last_String = (
                     stdoutstring.pop() if (len(stdoutstring) > 0 and "Pair found: " in stdoutstring[-1]) 
-                                        or (len(stdoutstring) > 0 and "multiple values: " in stdoutstring[-1])
+                                        or (len(stdoutstring) > 0 and "pair(s) found: " in stdoutstring[-1])
                     else "ERROR"
                 )
-                logging.info("=== Server Response Begin ===")                             #Output server response
+                logging.debug("=== Server Response Begin ===")                             #Output server response
                 for i in stdoutstring:
                     if(i != ''):    
-                        logging.info(self.Format_Response(i))
+                        logging.debug(self.Format_Response(i))
                 for j in stderrstring:
                     if(j != ''):    
                         if(j.__contains__("INFO:root")):
@@ -886,25 +919,30 @@ class SSH_Client_Main_Window(QMainWindow):
                             logging.warning(self.Format_Response(j))
                         elif(j.__contains__("ERROR:root")):
                             logging.error(self.Format_Response(j))
-                logging.info("=== Server Response End ===")
-                if "ERROR" not in Last_String and "WARNING" not in Last_String:            #If no server scripting errors
+                logging.debug("=== Server Response End ===")
+                if "ERROR" not in Last_String and "WARNING" not in Last_String:           #If no server scripting errors
                     if "Pair found: " in Last_String:                                     #If desired keyword was found and has a single value
                         Pair = Last_String.split("Pair found: ")[1]
-                        Keystring = Pair.split(' - ')[0].strip()[1:]                     #Chops off starting bracket
-                        Desired_String = Pair.split(' - ')[1].strip()[:-1]               #Chops off ending bracket
+                        Keystring = Pair.split(' - ')[0].strip()[1:]                      #Chops off starting bracket
+                        Desired_String = Pair.split(' - ')[1].strip()[:-1]                #Chops off ending bracket
                         Colored_Keystring = "<span style='color:#ffa02f;'>" + Keystring + "</span>"
-                        logging.info("Value for " + Colored_Keystring + " was retrieved")
-                        logging.info("Copying to the clipboard ...")
-                        pyperclip.copy(Desired_String)
-                    elif "multiple values: " in Last_String:                              #If desired keyword was found and has multiple values
-                        Pair_Split = Last_String.split(" had multiple values: ")
-                        Keystring = Pair_Split[0].replace("INFO:root:", "")
+                        if self.Toggle_Copy_Menu_Option.isChecked():                      #If auto copy is enabled
+                            logging.info("Value for " + Colored_Keystring + " was retrieved")
+                            logging.info("Copying to the clipboard ...")
+                            pyperclip.copy(Desired_String)
+                        else:
+                            hiddenvalue = LINK_TEMPLATE.format(("#" + Desired_String), "Copy")
+                            logging.info("Value for " + Colored_Keystring)
+                            logging.info("└── " + hiddenvalue)
+                    elif "pair(s) found: " in Last_String:                                #If desired keyword was found and has multiple values
+                        Pair_Split = Last_String.split(" pair(s) found: ")
+                        Keystring = Pair_Split[0].replace("INFO:root:", "").strip()
                         Desired_Strings = Pair_Split[1].split(" <> ")
                         Desired_Strings_No_Blanks = [i.strip() for i in Desired_Strings if not i.isspace()]   
                         Colored_Keystring = "<span style='color:#ffa02f;'>" + Keystring + "</span>"
                         logging.info("Data was retrieved")                     
                         logging.info("Value(s) for " + Colored_Keystring)
-                        for i in Desired_Strings_No_Blanks:                                 #List out keywords and give a copy link for each value
+                        for i in Desired_Strings_No_Blanks:                               #List out keywords and give a copy link for each value
                             pairlist = i[1:][:-1].split(" - ")
                             lineicon = "└── " if Desired_Strings_No_Blanks.index(i) == len(Desired_Strings_No_Blanks) - 1 else "├── "
                             hiddenvalue = LINK_TEMPLATE.format(("#" + pairlist[1]), "Copy")
@@ -916,12 +954,33 @@ class SSH_Client_Main_Window(QMainWindow):
             logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("SSH connection closed")
         self.Button_Toggle(True)
+
+    @pyqtSlot(list)
+    def Print_Disk_Info_Results(self, params):
+        try:
+            if not self.Includes_Errors(params):    
+                logging.debug("=== Server Response Begin ===")   
+                stdinstring, stdoutstring, stderrstring, runtime = params[0], params[1], params[2], params[3]
+                Headers = stdoutstring[0].replace("on", "").split()                          #Headers
+                for i in range(1, len(stdoutstring)):
+                    currentrow = stdoutstring[i].split()                                     #Current partition
+                    filesystem = currentrow[0]
+                    logging.debug(filesystem)
+                    for j in range(1, len(currentrow)):
+                        indent = "└── " if j == len(currentrow) - 1 else "├── "
+                        logging.debug(indent + Headers[j] + ": " + currentrow[j])
+                logging.debug("=== Server Response End ===")
+                logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
+        except Exception as E:
+            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+        logging.info("SSH connection closed")
+        self.Button_Toggle(True)
         
     @pyqtSlot(list)
     def Print_SSH_Fetch_Log_Results(self, params):
         try:
             if not self.Includes_Errors(params):                 #If no errors were thrown 
-                Filename = "SSHLogs.log"
+                Filename = "Server_Logs.log"
                 stdoutstring, stderrstring = self.Format_Lists(params[1], params[2])
                 if stdoutstring:
                     Invalid_Users = [i for i in stdoutstring if "invalid user" in i]
@@ -944,7 +1003,7 @@ class SSH_Client_Main_Window(QMainWindow):
                         File.write("----------------------------------------------------------------------------------\n")
                         for k in Successful_Logins:
                             File.write(k)
-                    logging.info("The following file(s) generated successfully")
+                    logging.info("The following file(s) generated")
                     logging.info("└── " + Colored_Filename)
                     logging.info("Logs were put into '" + os.path.basename(os.path.normpath(self.Fetch_Client_Storage_Path())) + "'")
                     logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
@@ -959,7 +1018,8 @@ class SSH_Client_Main_Window(QMainWindow):
     def Print_SSH_Fetch_File_Results(self, params):
         try:
             if not self.Includes_Errors(params):                 #If no errors were thrown 
-                logging.info("The following file(s) retrieved successfully")
+                Server_Space = params[0].pop()
+                logging.info("The following file(s) retrieved")
                 params[0].sort()
                 for i in params[0]:
                     Line_Icon = "└── " if params[0].index(i) == len(params[0]) - 1 else "├── "
@@ -967,6 +1027,7 @@ class SSH_Client_Main_Window(QMainWindow):
                     logging.info(Line_Icon + Colored_Filename)
                 logging.info("Files were put into '" + os.path.basename(os.path.normpath(self.Fetch_Client_Storage_Path())) + "'")
                 logging.info("NOTE: Files were put into the same configuration as the server")
+                logging.info("Remaining available server storage: " + Server_Space[3] + "b [" + Server_Space[4] + " Used]")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                  logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
@@ -979,14 +1040,16 @@ class SSH_Client_Main_Window(QMainWindow):
     def Print_SSH_Send_File_Results(self, params):
         try:
             if not self.Includes_Errors(params):                 #If no errors were thrown 
-                logging.info("The following file(s) sent successfully")
+                Server_Space = params[0].pop()
+                logging.info("The following file(s) sent")
                 params[0].sort()
-                for i in params[0]:
+                for i in params[0]:                             #Output the successfully sent files
                     Line_Icon = "└── " if params[0].index(i) == len(params[0]) - 1 else "├── "
                     Colored_Filename = "<span style='color:#ffa02f;'>" + os.path.basename(i) + "</span>"
                     logging.info(Line_Icon + Colored_Filename)
                 logging.info("Files were put into '" + os.path.basename(os.path.normpath(self.Fetch_Server_Storage_Path())) + "'")
                 logging.info("NOTE: Files were put into the same configuration as the local directory")
+                logging.info("Remaining available server storage: " + Server_Space[3] + "b [" + Server_Space[4] + " Used]")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                  logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
@@ -1090,9 +1153,8 @@ class SSH_Client_Main_Window(QMainWindow):
                                                 
     def Button_Toggle(self, toggle):
         GUI_Elements = [
-            self.Fetch,
-            self.Close,
-            self.Open
+            self.Execute_Button,
+            self.Close_Button,
         ]
         for i in GUI_Elements: 
             i.setEnabled(toggle) 
@@ -1130,6 +1192,12 @@ class SSH_Client_Main_Window(QMainWindow):
             return "Error"
         elif self.Logger_Level_Menu_Option_Debug.isChecked():
             return "Debug"
+        else:   #Default to debug
+            return "Debug"
+
+    def Clear_Logs_And_Save(self):
+        self.Clear_Logs()
+        self.Save_Settings()
 
     def Clear_Logs(self):
         self.LogEdit.clear()
@@ -1151,6 +1219,6 @@ if __name__ == "__main__":
         with open(Stylesheet_Path) as Stylesheet:
             app = QApplication(sys.argv)
             app.setStyleSheet(Stylesheet.read())
-            Main = SSH_Client_Main_Window()
+            Main = SSHClientMainWindow()
             Main.show()
             sys.exit(app.exec_())

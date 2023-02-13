@@ -6,7 +6,7 @@ import os
 from stat import S_ISDIR, S_ISREG
 from pythonping import ping
 
-class Paramiko_Client():
+class ParamikoClient():
     Client = None
     
     def __init__(self):
@@ -42,30 +42,40 @@ class Paramiko_Client():
             return SocketError
         except Exception as GenericError:
             return GenericError
-    
+
+    def Run(self, Command):
+        try:
+            Runtime = time.time()
+            stdin, stdout, stderr = self.Client.exec_command(
+                Command,
+                timeout=5
+            )
+            stdoutstring = stdout.readlines()
+            stderrstring = stderr.readlines()
+            self.Disconnect()
+            return [[], stdoutstring, stderrstring, (time.time() - Runtime)] 
+        except paramiko.AuthenticationException as AuthError:
+            return [AuthError, None, None, (time.time() - Runtime)]
+        except paramiko.SSHException as SSHError:
+            return [SSHError, None, None, (time.time() - Runtime)]
+        except socket.error as SocketError:
+            return [SocketError, None, None, (time.time() - Runtime)]
+        except Exception as GenericError:
+            return [GenericError, None, None, (time.time() - Runtime)]
+                
     def Connect_And_Run(self, Host, User, Pass, Command):
         try:
             Runtime = time.time()
             Connection_Error = self.Connect(Host, User, Pass)
-            if not Connection_Error:    #If no ssh connection problems
-                #Determine if command value is a single command or multiple
+            if not Connection_Error:                #If no ssh connection problems
                 Command_Converted = None
-                if isinstance(Command, str):
+                if isinstance(Command, str):        #Determine if command value is a single command or multiple
                     Command_Converted = Command
                 elif isinstance(Command, list):
                     Command_Converted = "\n".join([str(C) for C in Command])
                 else:
                     raise Exception("Command parameter passed of invalid type: " + str(type(Command)))
-
-                #Run the exec command with parameters
-                stdin, stdout, stderr = self.Client.exec_command(
-                    Command_Converted,
-                    timeout=5
-                )
-                stdoutstring = stdout.readlines()
-                stderrstring = stderr.readlines()
-                self.Disconnect()
-                return [[], stdoutstring, stderrstring, (time.time() - Runtime)]
+                return self.Run(Command_Converted)
             else: 
                 raise Connection_Error
         except paramiko.AuthenticationException as AuthError:
@@ -104,8 +114,11 @@ class Paramiko_Client():
 
     def Connect_And_Fetch_File(self, Host, User, Pass, SSP, LSP, Filename=None):
         try:
+            Return_Values = []
             Runtime = time.time()
             Connection_Error = self.Connect(Host, User, Pass)
+
+            #Fetch the desired files
             if not Connection_Error:    
                 if(Filename is not None):   
                     try:  #We want to fetch a single given file
@@ -114,8 +127,7 @@ class Paramiko_Client():
                         if FTPClient.stat(File_Location):
                             FTPClient.get(File_Location, (LSP + Filename))
                         FTPClient.close()
-                        self.Disconnect()
-                        return [[Filename], [], [], (time.time() - Runtime)]
+                        Return_Values = [[Filename], [], [], (time.time() - Runtime)]
                     except IOError as IO:
                         raise FileNotFoundError("The file '" + Filename + "' doesn't exist on the server")
                     except Exception as E:
@@ -146,14 +158,23 @@ class Paramiko_Client():
                                             FTPClient.get(Current_Iter, Full_Local_Address)
                                             Directory_Files.append(Cut_Down_Filename)
                         FTPClient.close()
-                        self.Disconnect()
-                        return [Directory_Files, [], [], (time.time() - Runtime)]
+                        Return_Values = [Directory_Files, [], [], (time.time() - Runtime)]
                     except IOError as IO:
                         raise IO
                     except Exception as E:
                         raise E
             else: 
                 raise Connection_Error
+
+            #Query the server for remaining space
+            stdin, stdout, stderr, runtime = self.Run("df -h /")
+            if stderr:
+                raise Exception(stderr)
+            else:
+                Return_Values[0].append(stdout[-1].split()[:-1])    #Update stdout output
+                Return_Values[-1] = runtime                         #Update total runtime
+            self.Disconnect()
+            return Return_Values
         except paramiko.AuthenticationException as AuthError:
             return [AuthError, None, None, (time.time() - Runtime)]
         except paramiko.SSHException as SSHError:
@@ -165,9 +186,12 @@ class Paramiko_Client():
 
     def Connect_And_Send_File(self, Host, User, Pass, SSP, LSP, Filename=None):
         try:
+            Return_Values = []
             Runtime = time.time()
             Connection_Error = self.Connect(Host, User, Pass)
-            if not Connection_Error:   
+
+            #Send the desired files
+            if not Connection_Error:        
                 if(Filename is not None):   #We want to send a single given file
                     if os.path.isfile(LSP + Filename):
                         FTPClient = self.Client.open_sftp()
@@ -175,21 +199,29 @@ class Paramiko_Client():
                         FTPClient.close()
                     else:
                         raise FileNotFoundError("The file '" + Filename + "' doesn't exist in '" + LSP + "'")
-                    self.Disconnect()
-                    return [[Filename], [], [], (time.time() - Runtime)]
+                    Return_Values = [[Filename], [], [], (time.time() - Runtime)]
                 else:                       
                     try:                    #We want to send all the files from the directory
                         FTPClient = self.Client.open_sftp()
                         Directory_Files = self.Walk_Through_Server_Dir_Send(LSP, SSP, FTPClient, [])
                         FTPClient.close()
-                        self.Disconnect()
-                        return [Directory_Files, [], [], (time.time() - Runtime)]
+                        Return_Values = [Directory_Files, [], [], (time.time() - Runtime)]
                     except IOError as IO:
                         raise IO
                     except Exception as E:
                         raise E
             else: 
                 raise Connection_Error
+
+            #Query the server for remaining space
+            stdin, stdout, stderr, runtime = self.Run("df -h /")
+            if stderr:
+                raise Exception(stderr)
+            else:
+                Return_Values[0].append(stdout[-1].split()[:-1])    #Update stdout output
+                Return_Values[-1] = runtime                         #Update total runtime
+            self.Disconnect()
+            return Return_Values
         except paramiko.AuthenticationException as AuthError:
             return [AuthError, None, None, (time.time() - Runtime)]
         except paramiko.SSHException as SSHError:
@@ -209,7 +241,7 @@ class Paramiko_Client():
         except Exception as GenericError:
             return [GenericError, None, None]
 
-    def Terminal_SSH(self, Host, User, Pass):
+    def Putty(self, Host, User, Pass):
         try:
             command = "powershell putty.exe " + User + "@" + Host + " -pw " + Pass
             output = subprocess.Popen(command)

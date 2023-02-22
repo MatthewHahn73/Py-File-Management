@@ -3,8 +3,8 @@ import time
 import subprocess
 import socket
 import os
+import sys
 from stat import S_ISDIR, S_ISREG
-from pythonping import ping
 
 class ParamikoClient():
     Client = None
@@ -233,7 +233,16 @@ class ParamikoClient():
                                            
     def Ping(self, Host):
         try:
-            return [ping(Host, verbose=False), "", ""] 
+            if sys.platform == "win32":     #Different permissions required
+                try:
+                    return [subprocess.check_output('ping -n 3 ' + Host, shell=True).decode('utf-8'), "", ""]
+                except IOError as IO:
+                    return [IO, None, None]
+            elif sys.platform == 'linux':       
+                try:
+                    return [subprocess.check_output('ping -c 3 ' + Host, shell=True).decode('utf-8'), "", ""]
+                except IOError as IO:
+                    return [IO, None, None]
         except subprocess.CalledProcessError as CalledProcessError:
             return [CalledProcessError.output.decode('utf-8'), None, None]
         except socket.error as SocketError:
@@ -241,11 +250,21 @@ class ParamikoClient():
         except Exception as GenericError:
             return [GenericError, None, None]
 
-    def Putty(self, Host, User, Pass):
+    def Terminal(self, Host, User, Pass):
         try:
-            command = "powershell putty.exe " + User + "@" + Host + " -pw " + Pass
-            output = subprocess.Popen(command)
-            return [output, [], []]
+            if sys.platform == "win32":     #Different terminal interfaces
+                try:
+                    command = "powershell putty.exe " + User + "@" + Host + " -pw " + Pass
+                    output = subprocess.Popen(command)
+                    return [output, [], []]
+                except IOError as IO:
+                    return [IO, None, None]
+            elif sys.platform == 'linux':       
+                try:
+                    os.system("gnome-terminal -e 'bash -c \"sshpass -p '" + Pass + "' ssh " + User + "@" + Host + "; exec bash\"'")
+                    return ["", "", ""]
+                except IOError as IO:
+                    return [IO, None, None]
         except subprocess.CalledProcessError as CalledProcessError:
             return [CalledProcessError.output.decode('utf-8'), None, None]
         except Exception as GenericError:

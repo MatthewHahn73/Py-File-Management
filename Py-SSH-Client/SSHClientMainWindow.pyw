@@ -40,13 +40,15 @@ Required Software
             -Purpose: SSH Connections
             -Installation: https://pypi.org/project/paramiko/
             -Documentation - https://www.paramiko.org/
-        -pythonping 
-            -Purpose: Pings
-            -Installation: https://pypi.org/project/pythonping/
     -Additional Software
         -Putty (Optional)
+            -Windows SSH Terminal
             -Purpose: Manual SSH Sessions
             -Installation: https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html
+        -sshpass (Optional)
+            -Linux SSH Terminal
+            -Purpose: Manual SSH Sessions
+            -Installation: 'sudo apt install sshpass'
         
 Functionality
     -Request
@@ -80,11 +82,11 @@ import pyperclip
 import time
 import re
 import webbrowser
+import subprocess
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtSvg import *
-from subprocess import CalledProcessError
 from socket import \
     error as SocketError \
     , timeout as SocketTimeout
@@ -97,7 +99,6 @@ from Files.Modules import \
     QTextEditLoggerCustom as QTEL \
     , QTextBrowserCustom as QCTB \
     , QThreadWorker as QTW \
-    , QLineEditCustom as QCLE \
     , ParamikoClient as Client 
 
 #Regex
@@ -320,8 +321,7 @@ class SSHClientMainWindow(QMainWindow):
         self.Request_Label.setText("Operation Type")
         self.Request_Label.setFixedHeight(25)
         self.Request_Label.setFont(Custom_Font)
-        Operation_Action_Combobox_Custom_LineEdit = QCLE.QCustomLineEdit()
-        Operation_Action_Combobox_Custom_LineEdit.focus_in_signal.connect(lambda: self.Toggle_Textbox_Dropdowns("Operation_Action_Combobox"))
+        Operation_Action_Combobox_Custom_LineEdit = QLineEdit()
         self.Operation_Action_Combobox = QComboBox()
         self.Operation_Action_Combobox.setFont(Custom_Font)    
         self.Operation_Action_Combobox.addItem("Request")
@@ -334,8 +334,7 @@ class SSHClientMainWindow(QMainWindow):
         self.Operation_Action_Combobox.lineEdit().setAlignment(Qt.AlignCenter) 
         self.Operation_Action_Combobox.lineEdit().setFont(Custom_Font) 
         self.Operation_Action_Combobox.currentIndexChanged.connect(self.Operation_Action_Changed)
-        Operation_Combobox_Custom_LineEdit = QCLE.QCustomLineEdit()
-        Operation_Combobox_Custom_LineEdit.focus_in_signal.connect(lambda: self.Toggle_Textbox_Dropdowns("Operation_Combobox"))
+        Operation_Combobox_Custom_LineEdit = QLineEdit()
         self.Operation_Combobox = QComboBox()
         self.Operation_Combobox.setFont(Custom_Font)    
         self.Operation_Combobox.setFixedHeight(25)
@@ -413,7 +412,7 @@ class SSHClientMainWindow(QMainWindow):
         self.setWindowIcon(QIcon(Icon_Path))
             
         #Window Settings
-        self.setWindowTitle("File Manager SSH Client v1.81b")
+        self.setWindowTitle("File Manager SSH Client v1.82b")
         self.setFixedSize(526, 533)
         widget = QWidget()
         widget.setLayout(self.MainLayout)
@@ -587,18 +586,34 @@ class SSHClientMainWindow(QMainWindow):
             return "Keys require 16 characters"
         return "Success"
 
-    def Validate_Putty_Executable(self):
-        if(shutil.which("putty.exe")):     #Check for existance of putty installation
-            return "Success"
-        else:                              #If no install exists, notify user of how to install 
-            self.Clear_Logs()
-            logging.warning("Putty was not found on the PATH")
-            logging.info("Download it " + LINK_TEMPLATE.format(PUTTY_DOWNLOAD_LINK, "Here"))
+    def Validate_Terminal_Executable(self):
+        if sys.platform == "win32":     #Putty required
+            try:
+                if(shutil.which("putty.exe")):     #Check for existance of putty installation
+                    return "Success"
+                else:                              #If no install exists, notify user of how to install 
+                    self.Clear_Logs()
+                    logging.warning("Putty was not found")
+                    logging.info("Download it " + LINK_TEMPLATE.format(PUTTY_DOWNLOAD_LINK, "Here"))
+            except Exception as EX:
+                logging.error(ERROR_TEMPLATE.format(type(EX).__name__, EX.args)) 
+        elif sys.platform == 'linux':   #SSHPass required
+            try:
+                Value = subprocess.check_output("dpkg -s sshpass", shell=True).decode('utf-8')
+                if 'install ok' in Value:
+                    return "Success"
+                else:
+                    raise Exception(Value)
+            except subprocess.CalledProcessError as EX:
+                logging.error("'sshpass' not installed")
+                logging.info("run 'sudo apt install sshpass'")
+            except Exception as EX:
+                logging.error(ERROR_TEMPLATE.format(type(EX).__name__, EX.args)) 
 
     def Terminal_Button_Pressed(self):
         DIV = self.Validate_Server_Input(Full=True)
         if DIV == "Success":
-            PIV = self.Validate_Putty_Executable()
+            PIV = self.Validate_Terminal_Executable()
             if PIV == "Success":
                 self.Open_Terminal_Instance()
         else:
@@ -822,7 +837,7 @@ class SSHClientMainWindow(QMainWindow):
         self.Button_Toggle(False)
         self.Clear_Logs()
         Host = self.Server_Name.text()
-        logging.info("Attempting to ping " + Host + " ...")
+        logging.info("Attempting to ping " + Host)
         self.PThread = QThread(self)
         self.PWorker = QTW.QThreadWorker(self.SSH_Object, Host)
         self.PWorker.moveToThread(self.PThread)
@@ -837,25 +852,10 @@ class SSHClientMainWindow(QMainWindow):
         self.PThread = QThread(self)
         self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text())
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Run_Putty_Instance)
-        self.PWorker.data.connect(self.Print_Putty_Opening_Results)
+        self.PThread.started.connect(self.PWorker.Run_Terminal_Instance)
+        self.PWorker.data.connect(self.Print_Terminal_Opening_Results)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
-
-    @pyqtSlot()
-    def Toggle_Textbox_Dropdowns(self, Name):
-        if Name == "Operation_Action_Combobox":
-            if self.Operation_Action_Combobox.view().isVisible():
-                self.Operation_Action_Combobox.hidePopup() 
-                self.setFocus()
-            else:
-                 self.Operation_Action_Combobox.showPopup()
-        elif Name == "Operation_Combobox":
-            if self.Operation_Combobox.view().isVisible():
-                self.Operation_Combobox.hidePopup() 
-                self.setFocus()
-            else:
-                self.Operation_Combobox.showPopup()
                 
     @pyqtSlot(QUrl)
     def Copy_Or_Open_Link(self, params):
@@ -1076,7 +1076,7 @@ class SSHClientMainWindow(QMainWindow):
         self.Button_Toggle(True)
 
     @pyqtSlot(list)
-    def Print_Putty_Opening_Results(self, params):
+    def Print_Terminal_Opening_Results(self, params):
         try:
             if not self.Includes_Errors(params):                 #If no errors were thrown on ssh connection of putty instance
                 self.Clear_Logs()
@@ -1092,7 +1092,7 @@ class SSHClientMainWindow(QMainWindow):
                                FileNotFoundError,
                                FileExistsError,
                                AttributeError,
-                               CalledProcessError,
+                               subprocess.CalledProcessError,
                                NoValidConnectionsError,
                                PasswordRequiredException,
                                AuthenticationException,

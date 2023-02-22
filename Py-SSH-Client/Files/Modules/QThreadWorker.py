@@ -67,9 +67,9 @@ class QThreadWorker(QObject):
             self.data.emit(list([e]))
             self.complete.emit()  
 
-    def Run_Putty_Instance(self):
+    def Run_Terminal_Instance(self):
         try:
-            stdin, stdout, stderr = self.SSH_Object.Putty(self.Host, self.Usr, self.Passwrd)
+            stdin, stdout, stderr = self.SSH_Object.Terminal(self.Host, self.Usr, self.Passwrd)
             self.data.emit(list([stdin, stdout, stderr]))
             self.complete.emit()
         except Exception as e:

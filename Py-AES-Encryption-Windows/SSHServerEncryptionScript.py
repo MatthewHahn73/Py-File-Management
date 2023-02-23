@@ -62,7 +62,7 @@ def Walk_Through_Directory(Directory, DesiredFilename):
             
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AES File Encryption App')
-    parser.add_argument('-op', default='app')
+    parser.add_argument('-op', default='ssh')
     parser.add_argument('-file', nargs='?', const='arg_was_not_given')
     parser.add_argument('-attr', nargs='?', const='arg_was_not_given')
     parser.add_argument('-key', nargs='?', const='arg_was_not_given')

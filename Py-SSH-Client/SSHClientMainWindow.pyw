@@ -1,13 +1,15 @@
 """
-SSH Client for File Manager Server
+SSH Client GUI 
 
 Current Bugs
-    -Somtimes connections to server will timeout even if server is up
+    -Rarely connections to server will timeout even if server is up
         -Related to a module?
         -Related to server firewall?
         -Server restart will fix
 
 Future Features
+    -Add in a xml option along with json
+        -Don't need to discriminate which in option drop down
     -Give more detailed log information than just SSH logins when server log request is executed
     -Add in an option to allow for use of SSH certificates 
         -This will require some serious valiation checking on the client side to ensure the existing of the certs
@@ -30,9 +32,9 @@ Required Software
             -Purpose: GUI Interface
             -Installation: https://pypi.org/project/PyQt5/
             -Documentation: https://www.riverbankcomputing.com/static/Docs/PyQt5/
-        -dark_orange (Modified Theme)
+        -darkorange (Modified Theme)
             -Purpose: GUI Theme
-            -Installation: https://github.com/sommerc/pyqt-stylesheets/blob/master/pyqtcss/src/dark_orange/style.qss
+            -Installation: https://github.com/sommerc/pyqt-stylesheets/blob/master/pyqtcss/src/darkorange/style.qss
         -pyperclip
             -Purpose: Clipboard Interactivity
             -Installation: https://pypi.org/project/pyperclip/
@@ -99,25 +101,9 @@ from Files.Modules import \
     QTextEditLoggerCustom as QTEL \
     , QTextBrowserCustom as QCTB \
     , QThreadWorker as QTW \
-    , ParamikoClient as Client 
-
-#Regex
-URL_REGEX = re.compile(
-    r'^(?:http|ftp)s?://'   #http:// or https://
-    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' #domain
-    r'localhost|'           #localhost
-    r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})' #ip
-    r'(?::\d+)?'            #optional port
-    r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-
-#Constants
-ERROR_TEMPLATE = "A {0} exception occurred. Arguments:\n{1!r}"
-LINK_TEMPLATE = "<a style='color:#ffa02f;' href='{0}'>{1}</a>"
-PUTTY_DOWNLOAD_LINK = "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html"
-
-#Fonts
-Custom_Font = QFont("Arial Black", 9)
-Custom_Font_Small = QFont("Arial Black", 8)
+    , ParamikoClient as Client \
+    , TextParsingWindow as SubWindow
+from Files.Modules.Constants import Constants
 
 #Logger information
 logger = logging.getLogger()
@@ -126,10 +112,10 @@ logging.getLogger("paramiko").setLevel(logging.DEBUG)
 
 #Main window
 class SSHClientMainWindow(QMainWindow):
-    Paths_Window = None
-    Keywords_Window = None
-    SSH_Object = None
-    MENU_STYLESHEET = (
+    PathsWindow = None
+    KeywordsWindow = None
+    SSHObject = None
+    MENUSTYLESHEET = (
         'QMenuBar { \
             border-bottom: 1px solid; \
             border-color: gray; \
@@ -155,243 +141,232 @@ class SSHClientMainWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.SSH_Object = Client.ParamikoClient()   
+        self.SSHObject = Client.ParamikoClient()   
 
         #Menu Bar
         Menu = self.menuBar()
-        Menu.setFont(Custom_Font)
-        Menu.setStyleSheet(self.MENU_STYLESHEET)
+        Menu.setFont(Constants.CustomFont)
+        Menu.setStyleSheet(self.MENUSTYLESHEET)
         
         #File
-        File_Menu = Menu.addMenu('File')
-        File_Menu.setFont(Custom_Font)
-        Save_Fields = QAction('Save Settings', self)
-        Save_Fields.setFont(Custom_Font)
-        Save_Fields.setShortcut("Ctrl+S")
-        Close_Action = QAction('Close', self)
-        Close_Action.setFont(Custom_Font)
-        File_Menu.addAction(Save_Fields)
-        File_Menu.addAction(Close_Action)
+        FileMenu = Menu.addMenu('File')
+        FileMenu.setFont(Constants.CustomFont)
+        SaveFields = QAction('Save Settings', self)
+        SaveFields.setFont(Constants.CustomFont)
+        SaveFields.setShortcut("Ctrl+S")
+        CloseAction = QAction('Close', self)
+        CloseAction.setFont(Constants.CustomFont)
+        FileMenu.addAction(SaveFields)
+        FileMenu.addAction(CloseAction)
 
         #File Tab Actions
-        Save_Fields.triggered.connect(self.Clear_Logs_And_Save)
-        Close_Action.triggered.connect(self.close)
+        SaveFields.triggered.connect(self.ClearLogsAndSave)
+        CloseAction.triggered.connect(self.close)
 
         #Options
-        Options_Menu = Menu.addMenu("Options")
-        Options_Menu.setFont(Custom_Font)
+        OptionsMenu = Menu.addMenu("Options")
+        OptionsMenu.setFont(Constants.CustomFont)
 
-        self.Toggle_Passwords_Menu_Option = QAction('Hide Passwords', self)
-        self.Toggle_Passwords_Menu_Option.setFont(Custom_Font)
-        self.Toggle_Passwords_Menu_Option.setCheckable(True)
+        self.TogglePasswordsMenuOption = QAction('Hide Passwords', self)
+        self.TogglePasswordsMenuOption.setFont(Constants.CustomFont)
+        self.TogglePasswordsMenuOption.setCheckable(True)
 
-        self.Toggle_Copy_Menu_Option = QAction('Auto Copy', self)
-        self.Toggle_Copy_Menu_Option.setFont(Custom_Font)
-        self.Toggle_Copy_Menu_Option.setCheckable(True)
+        LoggerLevelMenuOption = OptionsMenu.addMenu("Logging Level")
+        LoggerLevelMenuOption.setFont(Constants.CustomFont)
+        self.LoggerLevelMenuOptionError = QAction('Error', self)
+        self.LoggerLevelMenuOptionError.setFont(Constants.CustomFont)
+        self.LoggerLevelMenuOptionError.setCheckable(True)
+        self.LoggerLevelMenuOptionWarning = QAction('Warning', self)
+        self.LoggerLevelMenuOptionWarning.setFont(Constants.CustomFont)
+        self.LoggerLevelMenuOptionWarning.setCheckable(True)
+        self.LoggerLevelMenuOptionInfo = QAction('Info', self)
+        self.LoggerLevelMenuOptionInfo.setFont(Constants.CustomFont)
+        self.LoggerLevelMenuOptionInfo.setCheckable(True)
+        self.LoggerLevelMenuOptionDebug = QAction('Debug', self)
+        self.LoggerLevelMenuOptionDebug.setFont(Constants.CustomFont)
+        self.LoggerLevelMenuOptionDebug.setCheckable(True)
+        LoggerLevelMenuOption.addAction(self.LoggerLevelMenuOptionError)
+        LoggerLevelMenuOption.addAction(self.LoggerLevelMenuOptionWarning)
+        LoggerLevelMenuOption.addAction(self.LoggerLevelMenuOptionInfo)
+        LoggerLevelMenuOption.addAction(self.LoggerLevelMenuOptionDebug)
 
-        Logger_Level_Menu_Option = Options_Menu.addMenu("Logging Level")
-        Logger_Level_Menu_Option.setFont(Custom_Font)
-        self.Logger_Level_Menu_Option_Error = QAction('Error', self)
-        self.Logger_Level_Menu_Option_Error.setFont(Custom_Font)
-        self.Logger_Level_Menu_Option_Error.setCheckable(True)
-        self.Logger_Level_Menu_Option_Warning = QAction('Warning', self)
-        self.Logger_Level_Menu_Option_Warning.setFont(Custom_Font)
-        self.Logger_Level_Menu_Option_Warning.setCheckable(True)
-        self.Logger_Level_Menu_Option_Info = QAction('Info', self)
-        self.Logger_Level_Menu_Option_Info.setFont(Custom_Font)
-        self.Logger_Level_Menu_Option_Info.setCheckable(True)
-        self.Logger_Level_Menu_Option_Debug = QAction('Debug', self)
-        self.Logger_Level_Menu_Option_Debug.setFont(Custom_Font)
-        self.Logger_Level_Menu_Option_Debug.setCheckable(True)
-        Logger_Level_Menu_Option.addAction(self.Logger_Level_Menu_Option_Error)
-        Logger_Level_Menu_Option.addAction(self.Logger_Level_Menu_Option_Warning)
-        Logger_Level_Menu_Option.addAction(self.Logger_Level_Menu_Option_Info)
-        Logger_Level_Menu_Option.addAction(self.Logger_Level_Menu_Option_Debug)
-
-        Options_Menu.addAction(self.Toggle_Passwords_Menu_Option)
-        Options_Menu.addAction(self.Toggle_Copy_Menu_Option)
-        Options_Menu.addMenu(Logger_Level_Menu_Option)
+        OptionsMenu.addAction(self.TogglePasswordsMenuOption)
+        OptionsMenu.addMenu(LoggerLevelMenuOption)
 
         #Options Tab Actions
-        self.Toggle_Passwords_Menu_Option.triggered.connect(lambda: self.Toggle_Passwords())
-        self.Logger_Level_Menu_Option_Error.triggered.connect(lambda: self.Toggle_Logging_Level("Error"))
-        self.Logger_Level_Menu_Option_Warning.triggered.connect(lambda: self.Toggle_Logging_Level("Warning"))
-        self.Logger_Level_Menu_Option_Info.triggered.connect(lambda: self.Toggle_Logging_Level("Info"))
-        self.Logger_Level_Menu_Option_Debug.triggered.connect(lambda: self.Toggle_Logging_Level("Debug"))
-
-        """
-        #Views
-        View_Menu = Menu.addMenu("View")
-        View_Menu.setFont(Custom_Font)
-        self.Toggle_FullScreen_Option = QAction('Fullscreen', self)
-        self.Toggle_FullScreen_Option.setShortcut("F11")
-        self.Toggle_FullScreen_Option.setFont(Custom_Font)
-        self.Toggle_FullScreen_Option.setCheckable(False)
-
-        View_Menu.addAction(self.Toggle_FullScreen_Option)
-
-        #View Tab Actions
-        self.Toggle_FullScreen_Option.triggered.connect(lambda: self.Toggle_Fullscreen())
-        """
+        self.TogglePasswordsMenuOption.triggered.connect(lambda: self.TogglePasswords())
+        self.LoggerLevelMenuOptionError.triggered.connect(lambda: self.ToggleLoggingLevel("Error"))
+        self.LoggerLevelMenuOptionWarning.triggered.connect(lambda: self.ToggleLoggingLevel("Warning"))
+        self.LoggerLevelMenuOptionInfo.triggered.connect(lambda: self.ToggleLoggingLevel("Info"))
+        self.LoggerLevelMenuOptionDebug.triggered.connect(lambda: self.ToggleLoggingLevel("Debug"))
 
         #Keyboard Binds
         self.shortcut = QShortcut(QKeySequence("Return"), self) 
-        self.shortcut.activated.connect(self.Execute_Button_Pressed)
+        self.shortcut.activated.connect(self.ExecuteButtonPressed)
         
         #Layout
         self.Layout = QGridLayout()
 
         #File Server Input
-        self.Server_Layout = QVBoxLayout()
-        self.Server_Label = QLabel(self)
-        self.Server_Label.setText("Server Information")
-        self.Server_Label.setFixedHeight(25)
-        self.Server_Label.setFont(Custom_Font)
-        self.Server_Name = QLineEdit(self)
-        self.Server_Name.setPlaceholderText("Hostname")
-        self.Server_Name.setFont(Custom_Font)
-        self.Server_Name.setFixedHeight(25)
-        self.Server_Input = QLineEdit(self)
-        self.Server_Input.setPlaceholderText("Username")
-        self.Server_Input.setFont(Custom_Font)
-        self.Server_Input.setFixedHeight(25)
-        self.Server_Password = QLineEdit(self)
-        self.Server_Password.setPlaceholderText("Password")
-        self.Server_Password.setFont(Custom_Font)
-        self.Server_Password.setFixedHeight(25)
-        self.Server_Layout.addWidget(self.Server_Label)
-        self.Server_Layout.addWidget(self.Server_Name)
-        self.Server_Layout.addWidget(self.Server_Input)
-        self.Server_Layout.addWidget(self.Server_Password)
+        self.ServerLayout = QVBoxLayout()
+        self.ServerLabel = QLabel(self)
+        self.ServerLabel.setText("Server Information")
+        self.ServerLabel.setFixedHeight(25)
+        self.ServerLabel.setFont(Constants.CustomFont)
+        self.ServerName = QLineEdit(self)
+        self.ServerName.setPlaceholderText("Hostname")
+        self.ServerName.setFont(Constants.CustomFont)
+        self.ServerName.setFixedHeight(25)
+        self.ServerInput = QLineEdit(self)
+        self.ServerInput.setPlaceholderText("Username")
+        self.ServerInput.setFont(Constants.CustomFont)
+        self.ServerInput.setFixedHeight(25)
+        self.ServerPassword = QLineEdit(self)
+        self.ServerPassword.setPlaceholderText("Password")
+        self.ServerPassword.setFont(Constants.CustomFont)
+        self.ServerPassword.setFixedHeight(25)
+        self.ServerLayout.addWidget(self.ServerLabel)
+        self.ServerLayout.addWidget(self.ServerName)
+        self.ServerLayout.addWidget(self.ServerInput)
+        self.ServerLayout.addWidget(self.ServerPassword)
         
         #AES Key/Keyword Input
-        self.File_Layout = QVBoxLayout()
-        self.Keyword_Label = QLabel(self)
-        self.Keyword_Label.setText("File Information")
-        self.Keyword_Label.setFixedHeight(25)
-        self.Keyword_Label.setFont(Custom_Font)
-        self.File_Location = QLineEdit(self)
-        self.File_Location.setPlaceholderText("Filename")
-        self.File_Location.setFont(Custom_Font)
-        self.File_Location.setFixedHeight(25)
-        self.Keyword_Input = QLineEdit(self)
-        self.Keyword_Input.setFont(Custom_Font)
-        self.Keyword_Input.setFixedHeight(25)
-        self.Keyword_Input.setPlaceholderText("Field")
-        self.Keyword_Input.setMaxLength(64)
-        self.Key_Input = QLineEdit(self)
-        self.Key_Input.setPlaceholderText("AES Key")
-        self.Key_Input.setFixedHeight(25)
-        self.Key_Input.setFont(Custom_Font)
-        self.Key_Input.setMaxLength(16)
-        self.File_Layout.addWidget(self.Keyword_Label)
-        self.File_Layout.addWidget(self.File_Location)
-        self.File_Layout.addWidget(self.Keyword_Input)
-        self.File_Layout.addWidget(self.Key_Input)
+        self.FileLayout = QVBoxLayout()
+        self.KeywordInputStack = QHBoxLayout()
+        self.KeywordLabel = QLabel(self)
+        self.KeywordLabel.setText("File Information")
+        self.KeywordLabel.setFixedHeight(25)
+        self.KeywordLabel.setFont(Constants.CustomFont)
+        self.FileLocation = QLineEdit(self)
+        self.FileLocation.setPlaceholderText("Filename")
+        self.FileLocation.setFont(Constants.CustomFont)
+        self.FileLocation.setFixedHeight(25)
+        self.KeywordInput = QLineEdit(self)
+        self.KeywordInput.setFont(Constants.CustomFont)
+        self.KeywordInput.setFixedHeight(25)
+        self.KeywordInput.setPlaceholderText("Field")
+        self.KeywordInput.setMaxLength(64)
+        self.KeywordInputExpandButton = QPushButton("Add", self)
+        self.KeywordInputExpandButton.setFont(Constants.CustomFont)
+        self.KeywordInputExpandButton.setCheckable(False)
+        self.KeywordInputExpandButton.setFixedHeight(25)
+        self.KeywordInputExpandButton.setFixedWidth(80)
+        self.KeywordInputExpandButton.clicked.connect(self.OpenSecondaryWindow)
+        self.KeywordInputStack.addWidget(self.KeywordInput)
+        self.KeywordInputStack.addWidget(self.KeywordInputExpandButton)
+        self.KeyInput = QLineEdit(self)
+        self.KeyInput.setPlaceholderText("AES Key")
+        self.KeyInput.setFixedHeight(25)
+        self.KeyInput.setFont(Constants.CustomFont)
+        self.KeyInput.setMaxLength(16)
+        self.FileLayout.addWidget(self.KeywordLabel)
+        self.FileLayout.addWidget(self.FileLocation)
+        self.FileLayout.addLayout(self.KeywordInputStack)
+        self.FileLayout.addWidget(self.KeyInput)
 
         #Directory Input
-        self.Directory_Stack = QVBoxLayout()
-        self.Client_Directory_Stack = QHBoxLayout()
-        self.Path_Field_Label = QLabel(self)
-        self.Path_Field_Label.setText("Working Directories")
-        self.Path_Field_Label.setFixedHeight(25)
-        self.Path_Field_Label.setFont(Custom_Font)
-        self.Server_Storage_Path_Field = QLineEdit(self)
-        self.Server_Storage_Path_Field.setFont(Custom_Font)
-        self.Server_Storage_Path_Field.setPlaceholderText("Server Storage")
-        self.Server_Storage_Path_Field.setFixedHeight(25)
-        self.Client_Storage_Path_Field = QLineEdit(self)
-        self.Client_Storage_Path_Field.setFont(Custom_Font)
-        self.Client_Storage_Path_Field.setPlaceholderText("Client Storage")
-        self.Client_Storage_Path_Field.setFixedHeight(25)
-        self.Client_Browse_Local_Button = QPushButton("Browse", self)
-        self.Client_Browse_Local_Button.setFont(Custom_Font)
-        self.Client_Browse_Local_Button.setCheckable(False)
-        self.Client_Browse_Local_Button.setFixedHeight(25)
-        self.Client_Browse_Local_Button.setFixedWidth(80)
-        self.Client_Browse_Local_Button.clicked.connect(self.Open_Directory_Dialog_Local)
-        self.Client_Directory_Stack.addWidget(self.Client_Storage_Path_Field)
-        self.Client_Directory_Stack.addWidget(self.Client_Browse_Local_Button)
-        self.Directory_Stack.addWidget(self.Path_Field_Label)
-        self.Directory_Stack.addWidget(self.Server_Storage_Path_Field)
-        self.Directory_Stack.addLayout(self.Client_Directory_Stack)
+        self.DirectoryStack = QVBoxLayout()
+        self.ClientDirectoryStack = QHBoxLayout()
+        self.PathFieldLabel = QLabel(self)
+        self.PathFieldLabel.setText("Working Directories")
+        self.PathFieldLabel.setFixedHeight(25)
+        self.PathFieldLabel.setFont(Constants.CustomFont)
+        self.ServerStoragePathField = QLineEdit(self)
+        self.ServerStoragePathField.setFont(Constants.CustomFont)
+        self.ServerStoragePathField.setPlaceholderText("Server Storage")
+        self.ServerStoragePathField.setFixedHeight(25)
+        self.ClientStoragePathField = QLineEdit(self)
+        self.ClientStoragePathField.setFont(Constants.CustomFont)
+        self.ClientStoragePathField.setPlaceholderText("Client Storage")
+        self.ClientStoragePathField.setFixedHeight(25)
+        self.ClientBrowseLocalButton = QPushButton("Browse", self)
+        self.ClientBrowseLocalButton.setFont(Constants.CustomFont)
+        self.ClientBrowseLocalButton.setCheckable(False)
+        self.ClientBrowseLocalButton.setFixedHeight(25)
+        self.ClientBrowseLocalButton.setFixedWidth(80)
+        self.ClientBrowseLocalButton.clicked.connect(self.OpenDirectoryDialogLocal)
+        self.ClientDirectoryStack.addWidget(self.ClientStoragePathField)
+        self.ClientDirectoryStack.addWidget(self.ClientBrowseLocalButton)
+        self.DirectoryStack.addWidget(self.PathFieldLabel)
+        self.DirectoryStack.addWidget(self.ServerStoragePathField)
+        self.DirectoryStack.addLayout(self.ClientDirectoryStack)
 
         #Operation Comboboxes
-        self.Request_Label = QLabel(self)
-        self.Request_Label.setText("Operation Type")
-        self.Request_Label.setFixedHeight(25)
-        self.Request_Label.setFont(Custom_Font)
-        Operation_Action_Combobox_Custom_LineEdit = QLineEdit()
-        self.Operation_Action_Combobox = QComboBox()
-        self.Operation_Action_Combobox.setFont(Custom_Font)    
-        self.Operation_Action_Combobox.addItem("Request")
-        self.Operation_Action_Combobox.addItem("Send")
-        self.Operation_Action_Combobox.setFixedHeight(25)
-        self.Operation_Action_Combobox.setFixedWidth(120)
-        self.Operation_Action_Combobox.setEditable(True)
-        self.Operation_Action_Combobox.setLineEdit(Operation_Action_Combobox_Custom_LineEdit)
-        self.Operation_Action_Combobox.lineEdit().setReadOnly(True)
-        self.Operation_Action_Combobox.lineEdit().setAlignment(Qt.AlignCenter) 
-        self.Operation_Action_Combobox.lineEdit().setFont(Custom_Font) 
-        self.Operation_Action_Combobox.currentIndexChanged.connect(self.Operation_Action_Changed)
-        Operation_Combobox_Custom_LineEdit = QLineEdit()
-        self.Operation_Combobox = QComboBox()
-        self.Operation_Combobox.setFont(Custom_Font)    
-        self.Operation_Combobox.setFixedHeight(25)
-        self.Operation_Combobox.setFixedWidth(120)
-        self.Operation_Combobox.setEditable(True)
-        self.Operation_Combobox.setLineEdit(Operation_Combobox_Custom_LineEdit)
-        self.Operation_Combobox.lineEdit().setReadOnly(True)
-        self.Operation_Combobox.lineEdit().setAlignment(Qt.AlignCenter) 
-        self.Operation_Combobox.lineEdit().setFont(Custom_Font) 
+        self.RequestLabel = QLabel(self)
+        self.RequestLabel.setText("Operation Type")
+        self.RequestLabel.setFixedHeight(25)
+        self.RequestLabel.setFont(Constants.CustomFont)
+        OperationActionComboboxCustomLineEdit = QLineEdit()
+        self.OperationActionCombobox = QComboBox()
+        self.OperationActionCombobox.setFont(Constants.CustomFont)    
+        self.OperationActionCombobox.addItem("Request")
+        self.OperationActionCombobox.addItem("Send")
+        self.OperationActionCombobox.setFixedHeight(25)
+        self.OperationActionCombobox.setFixedWidth(120)
+        self.OperationActionCombobox.setEditable(True)
+        self.OperationActionCombobox.setLineEdit(OperationActionComboboxCustomLineEdit)
+        self.OperationActionCombobox.lineEdit().setReadOnly(True)
+        self.OperationActionCombobox.lineEdit().setAlignment(Qt.AlignCenter) 
+        self.OperationActionCombobox.lineEdit().setFont(Constants.CustomFont) 
+        self.OperationActionCombobox.currentIndexChanged.connect(self.OperationActionChanged)
+        OperationComboboxCustomLineEdit = QLineEdit()
+        self.OperationCombobox = QComboBox()
+        self.OperationCombobox.setFont(Constants.CustomFont)    
+        self.OperationCombobox.setFixedHeight(25)
+        self.OperationCombobox.setFixedWidth(120)
+        self.OperationCombobox.setEditable(True)
+        self.OperationCombobox.setLineEdit(OperationComboboxCustomLineEdit)
+        self.OperationCombobox.lineEdit().setReadOnly(True)
+        self.OperationCombobox.lineEdit().setAlignment(Qt.AlignCenter) 
+        self.OperationCombobox.lineEdit().setFont(Constants.CustomFont) 
                                        
         #Buttons
-        self.Open_Button = QPushButton("Open Storage", self)
-        self.Open_Button.setFont(Custom_Font)
-        self.Open_Button.setCheckable(False)
-        self.Open_Button.setFixedHeight(25)
-        self.Open_Button.setFixedWidth(120)
-        self.Open_Button.clicked.connect(self.Open_Storage)
-        self.Terminal_Button = QPushButton("Open Terminal", self)
-        self.Terminal_Button.setFont(Custom_Font)
-        self.Terminal_Button.setCheckable(False)
-        self.Terminal_Button.setFixedHeight(25)
-        self.Terminal_Button.setFixedWidth(120)
-        self.Terminal_Button.clicked.connect(self.Terminal_Button_Pressed)
-        self.Close_Button = QPushButton("Clear Clipboard && Close", self)
-        self.Close_Button.setFont(Custom_Font)
-        self.Close_Button.setCheckable(False)
-        self.Close_Button.setFixedHeight(25)
-        self.Close_Button.setFixedWidth(246)
-        self.Close_Button.clicked.connect(self.Clear_Close)
-        self.Execute_Button = QPushButton("Execute", self)
-        self.Execute_Button.setFont(Custom_Font)
-        self.Execute_Button.setCheckable(False)
-        self.Execute_Button.setFixedHeight(25)
-        self.Execute_Button.setFixedWidth(246)
-        self.Execute_Button.clicked.connect(self.Execute_Button_Pressed)
+        self.OpenButton = QPushButton("Open Storage", self)
+        self.OpenButton.setFont(Constants.CustomFont)
+        self.OpenButton.setCheckable(False)
+        self.OpenButton.setFixedHeight(25)
+        self.OpenButton.setFixedWidth(120)
+        self.OpenButton.clicked.connect(self.OpenStorage)
+        self.TerminalButton = QPushButton("Open Terminal", self)
+        self.TerminalButton.setFont(Constants.CustomFont)
+        self.TerminalButton.setCheckable(False)
+        self.TerminalButton.setFixedHeight(25)
+        self.TerminalButton.setFixedWidth(120)
+        self.TerminalButton.clicked.connect(self.TerminalButtonPressed)
+        self.CloseButton = QPushButton("Clear Clipboard && Close", self)
+        self.CloseButton.setFont(Constants.CustomFont)
+        self.CloseButton.setCheckable(False)
+        self.CloseButton.setFixedHeight(25)
+        self.CloseButton.setFixedWidth(246)
+        self.CloseButton.clicked.connect(self.ClearClose)
+        self.ExecuteButton = QPushButton("Execute", self)
+        self.ExecuteButton.setFont(Constants.CustomFont)
+        self.ExecuteButton.setCheckable(False)
+        self.ExecuteButton.setFixedHeight(25)
+        self.ExecuteButton.setFixedWidth(246)
+        self.ExecuteButton.clicked.connect(self.ExecuteButtonPressed)
 
         #Set Bottom Stack
-        self.Bottom_Stack = QGridLayout()
-        self.Inner_Combo_Stack = QHBoxLayout()
-        self.Inner_Combo_Stack.addWidget(self.Operation_Action_Combobox)
-        self.Inner_Combo_Stack.addWidget(self.Operation_Combobox)
-        self.Inner_Button_Stack = QHBoxLayout()
-        self.Inner_Button_Stack.addWidget(self.Open_Button)
-        self.Inner_Button_Stack.addWidget(self.Terminal_Button)
-        self.Bottom_Stack.addWidget(self.Request_Label, 1, 1, alignment=Qt.AlignBottom)
-        self.Bottom_Stack.addLayout(self.Inner_Combo_Stack, 2, 1, 1, 2, alignment=Qt.AlignLeft)
-        self.Bottom_Stack.addLayout(self.Inner_Button_Stack, 3, 1, 1, 2, alignment=Qt.AlignLeft)
-        self.Bottom_Stack.addWidget(self.Close_Button, 4, 1, 1, 2, alignment=Qt.AlignCenter)
-        self.Bottom_Stack.addWidget(self.Execute_Button, 5, 1, 1, 2, alignment=Qt.AlignCenter)
+        self.BottomStack = QGridLayout()
+        self.InnerComboStack = QHBoxLayout()
+        self.InnerComboStack.addWidget(self.OperationActionCombobox)
+        self.InnerComboStack.addWidget(self.OperationCombobox)
+        self.InnerButtonStack = QHBoxLayout()
+        self.InnerButtonStack.addWidget(self.OpenButton)
+        self.InnerButtonStack.addWidget(self.TerminalButton)
+        self.BottomStack.addWidget(self.RequestLabel, 1, 1, alignment=Qt.AlignBottom)
+        self.BottomStack.addLayout(self.InnerComboStack, 2, 1, 1, 2, alignment=Qt.AlignLeft)
+        self.BottomStack.addLayout(self.InnerButtonStack, 3, 1, 1, 2, alignment=Qt.AlignLeft)
+        self.BottomStack.addWidget(self.CloseButton, 4, 1, 1, 2, alignment=Qt.AlignCenter)
+        self.BottomStack.addWidget(self.ExecuteButton, 5, 1, 1, 2, alignment=Qt.AlignCenter)
 
         #Set Left Grid
         self.LogLayout = QVBoxLayout()
         self.LogEdit = QCTB.QTextBrowserCustom()
         self.LogEdit.setOpenExternalLinks(True)
-        self.LogEdit.setFont(Custom_Font_Small)
+        self.LogEdit.setFont(Constants.CustomFontSmall)
         self.LogEdit.setReadOnly(True)
-        self.LogEdit.anchorClicked.connect(self.Copy_Or_Open_Link)
+        self.LogEdit.anchorClicked.connect(self.CopyOrOpenLink)
         Handler = QTEL.QTextEditLoggerCustom()
         Handler.sigLog.connect(self.LogEdit.append)
         logger.addHandler(Handler)   
@@ -399,34 +374,34 @@ class SSHClientMainWindow(QMainWindow):
         
         #Set Main Layout(s)
         self.MainLayout = QGridLayout()
-        self.MainLayout.addLayout(self.Server_Layout, 1, 2)
-        self.MainLayout.addLayout(self.File_Layout, 2, 2)
-        self.MainLayout.addLayout(self.Directory_Stack, 3, 2)
-        self.MainLayout.addLayout(self.Bottom_Stack, 4, 2, alignment=Qt.AlignCenter | Qt.AlignBottom)
+        self.MainLayout.addLayout(self.ServerLayout, 1, 2)
+        self.MainLayout.addLayout(self.FileLayout, 2, 2)
+        self.MainLayout.addLayout(self.DirectoryStack, 3, 2)
+        self.MainLayout.addLayout(self.BottomStack, 4, 2, alignment=Qt.AlignCenter | Qt.AlignBottom)
         self.MainLayout.addLayout(self.LogLayout, 1, 1, 4, 1, alignment=Qt.AlignCenter)
 
         #Icon Settings
-        Icon_Path = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Icons/Padlock_Icon_2.ico").replace("\\", "/")
-        if not os.path.exists(Icon_Path): 
+        IconPath = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Icons/PadlockIcon2.ico").replace("\\", "/")
+        if not os.path.exists(IconPath): 
             logging.warning("Icon file couldn't be located")
-        self.setWindowIcon(QIcon(Icon_Path))
+        self.setWindowIcon(QIcon(IconPath))
             
         #Window Settings
-        self.setWindowTitle("File Manager SSH Client v1.82b")
+        self.setWindowTitle(Constants.VERSIONNUMBER)
         self.setFixedSize(526, 533)
         widget = QWidget()
         widget.setLayout(self.MainLayout)
         self.setCentralWidget(widget)
-        self.Load_Settings()
-        self.Operation_Action_Changed()
+        self.LoadSettings()
+        self.OperationActionChanged()
         self.setFocus()
-        self.Client_Storage_Path_Field.setCursorPosition(0)
-        self.Server_Storage_Path_Field.setCursorPosition(0)
+        self.ClientStoragePathField.setCursorPosition(0)
+        self.ServerStoragePathField.setCursorPosition(0)
 
-    def Load_Settings(self):
+    def LoadSettings(self):
         try:
             Path = (os.path.dirname(os.path.realpath(__file__))).replace("\\", "/") + "/Files/"
-            Full_Path = (os.path.dirname(os.path.realpath(__file__))).replace("\\", "/") + "/Files/Settings.json"
+            FullPath = (os.path.dirname(os.path.realpath(__file__))).replace("\\", "/") + "/Files/Settings.json"
 
             #Check for relevant files/folders required for functionality, 
             if not os.path.exists(Path):                  #If no files folder, create one
@@ -435,171 +410,166 @@ class SSHClientMainWindow(QMainWindow):
             if not os.path.exists(Path + "/Storage/"):    #If no storage folder, create one
                 logging.info("No default 'Storage' folder found in the directory. Creating one ...")
                 os.makedirs(Path + "/Storage/")
-            if not os.path.exists(Full_Path):             #If no Settings.json, create one
+            if not os.path.exists(FullPath):             #If no Settings.json, create one
                 logging.info("No 'Settings' folder found in the directory. Creating one ...")
-                with open(Full_Path, 'w'): 
-                    self.Save_Settings()
+                with open(FullPath, 'w'): 
+                    self.SaveSettings()
 
             #Read settings and set app values
-            with open(Full_Path, "r") as File:      
+            with open(FullPath, "r") as File:      
                 Settings = json.load(File)
 
                 #Read in and check for missing values in the 'Paths' settings
                 if not (Settings.get('Paths') is None):
                     if not (Settings['Paths'].get('Server') is None):
-                        self.Server_Storage_Path_Field.setText(Settings['Paths']["Server"] if Settings['Paths']["Server"] else "")
+                        self.ServerStoragePathField.setText(Settings['Paths']["Server"] if Settings['Paths']["Server"] else "")
                     else:
-                        raise KeyError("Missing 'Server' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                        raise KeyError("Missing 'Server' attribute in " + os.path.basename(os.path.normpath(FullPath)))
                     if not (Settings['Paths'].get('Client') is None):
-                        self.Client_Storage_Path_Field.setText(Settings['Paths']["Client"] if Settings['Paths']["Client"] else (os.getcwd() + "/Files/Storage/").replace("\\", "/"))
+                        self.ClientStoragePathField.setText(Settings['Paths']["Client"] if Settings['Paths']["Client"] else (os.getcwd() + "/Files/Storage/").replace("\\", "/"))
                     else:
-                        raise KeyError("Missing 'Client' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                        raise KeyError("Missing 'Client' attribute in " + os.path.basename(os.path.normpath(FullPath)))
                 else:
-                    raise KeyError("Missing 'Paths' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                    raise KeyError("Missing 'Paths' attribute in " + os.path.basename(os.path.normpath(FullPath)))
 
                 #Read in and check for missing values in the 'Fields' settings
                 if not (Settings.get('Fields') is None):
                     if not (Settings['Fields'].get('USER') is None):
-                        self.Server_Input.setText(Settings["Fields"]["USER"])
+                        self.ServerInput.setText(Settings["Fields"]["USER"])
                     else:
-                        raise KeyError("Missing 'USER' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                        raise KeyError("Missing 'USER' attribute in " + os.path.basename(os.path.normpath(FullPath)))
                     if not (Settings['Fields'].get('IP') is None):
-                        self.Server_Name.setText(Settings["Fields"]["IP"])
+                        self.ServerName.setText(Settings["Fields"]["IP"])
                     else:
-                        raise KeyError("Missing 'IP' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                        raise KeyError("Missing 'IP' attribute in " + os.path.basename(os.path.normpath(FullPath)))
                     if not (Settings['Fields'].get('FILE') is None):
-                        self.File_Location.setText(Settings["Fields"]["FILE"])
+                        self.FileLocation.setText(Settings["Fields"]["FILE"])
                     else:
-                        raise KeyError("Missing 'FILE' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                        raise KeyError("Missing 'FILE' attribute in " + os.path.basename(os.path.normpath(FullPath)))
                 else:
-                    raise KeyError("Missing 'Fields' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                    raise KeyError("Missing 'Fields' attribute in " + os.path.basename(os.path.normpath(FullPath)))
 
                 #Read in and check for missing values in the 'Options' settings
                 if not (Settings.get('Options') is None):
                     if not (Settings['Options'].get('HidePasswords') is None):
-                        self.Toggle_Passwords_Menu_Option.setChecked(Settings["Options"]["HidePasswords"])
+                        self.TogglePasswordsMenuOption.setChecked(Settings["Options"]["HidePasswords"])
                         if(Settings["Options"]["HidePasswords"]):
-                            self.Server_Password.setEchoMode(QLineEdit.Password)
-                            self.Key_Input.setEchoMode(QLineEdit.Password)
+                            self.ServerPassword.setEchoMode(QLineEdit.Password)
+                            self.KeyInput.setEchoMode(QLineEdit.Password)
                     else:
-                        raise KeyError("Missing 'HidePasswords' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
-
-                    if not (Settings['Options'].get('AutoCopy') is None):
-                        self.Toggle_Copy_Menu_Option.setChecked(Settings["Options"]["AutoCopy"])
-                    else:
-                        raise KeyError("Missing 'HidePasswords' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                        raise KeyError("Missing 'HidePasswords' attribute in " + os.path.basename(os.path.normpath(FullPath)))
                         
                     if not (Settings['Options'].get('LoggingLevel') is None):
-                        self.Toggle_Logging_Level(Settings["Options"]["LoggingLevel"])
+                        self.ToggleLoggingLevel(Settings["Options"]["LoggingLevel"])
                     else:
-                        raise KeyError("Missing 'LoggingLevel' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                        raise KeyError("Missing 'LoggingLevel' attribute in " + os.path.basename(os.path.normpath(FullPath)))
                 else:
-                    raise KeyError("Missing 'Options' attribute in " + os.path.basename(os.path.normpath(Full_Path)))
+                    raise KeyError("Missing 'Options' attribute in " + os.path.basename(os.path.normpath(FullPath)))
 
         except json.decoder.JSONDecodeError as JSONDE:
-            logging.error(ERROR_TEMPLATE.format(type(JSONDE).__name__, JSONDE.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(JSONDE).name, JSONDE.args)) 
             logging.warning("Some settings may not have loaded properly")
         except KeyError as KE:
-            logging.error(ERROR_TEMPLATE.format(type(KE).__name__, KE.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(KE).name, KE.args)) 
             logging.warning("Some settings may not have loaded properly")
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
             logging.warning("Some settings may not have loaded properly")
                     
-    def Save_Settings(self):
+    def SaveSettings(self):
         try:
             Path = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Settings.json").replace("\\", "/")
             with open(Path, "w") as File:           #Read values and set file settings
                 Config = {
                     "Fields" : {
-                        "IP" : self.Server_Name.text(),
-                        "USER" : self.Server_Input.text(),
-                        "FILE" : self.File_Location.text()
+                        "IP" : self.ServerName.text(),
+                        "USER" : self.ServerInput.text(),
+                        "FILE" : self.FileLocation.text()
                     },
                     "Paths" : {
-                        "Client" : self.Fetch_Client_Storage_Path(),
-                        "Server" :  self.Fetch_Server_Storage_Path()
+                        "Client" : self.FetchClientStoragePath(),
+                        "Server" :  self.FetchServerStoragePath()
                     }, 
                     "Options" : {
-                        "HidePasswords" : self.Toggle_Passwords_Menu_Option.isChecked(),
-                        "AutoCopy" : self.Toggle_Copy_Menu_Option.isChecked(),
-                        "LoggingLevel" : self.Fetch_Logging_Level()
+                        "HidePasswords" : self.TogglePasswordsMenuOption.isChecked(),
+                        "AutoCopy" : self.ToggleCopyMenuOption.isChecked(),
+                        "LoggingLevel" : self.FetchLoggingLevel()
                     }
                 }       
                 File.write(json.dumps(Config))
             logging.info("Settings saved in '" + os.path.basename(os.path.normpath(Path)) + "'")
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
             logging.warning("Settings were not saved properly")
 
-    def Open_Directory_Dialog_Local(self):
+    def OpenDirectoryDialogLocal(self):
         try:
-            dir_ = QFileDialog.getExistingDirectory(None, 'Browse Local Directory', 'C:\\', QFileDialog.ShowDirsOnly)
-            if dir_:
-                self.Client_Storage_Path_Field.setText(dir_ + "/")
-                self.Client_Storage_Path_Field.setCursorPosition(0)
+            dir = QFileDialog.getExistingDirectory(None, 'Browse Local Directory', 'C:\\', QFileDialog.ShowDirsOnly)
+            if dir:
+                self.ClientStoragePathField.setText(dir + "/")
+                self.ClientStoragePathField.setCursorPosition(0)
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
                 
-    def Validate_Server_Input(self, Full):  
-        if not self.Server_Name.text():
+    def ValidateServerInput(self, Full):  
+        if not self.ServerName.text():
             return "Missing hostname"
         if Full:
-            if not self.Server_Input.text():
+            if not self.ServerInput.text():
                 return "Missing username"
-            if not self.Server_Password.text():
+            if not self.ServerPassword.text():
                 return "Missing user password"
         return "Success"
     
-    def Validate_Minimum_File_Input(self):
-        if not self.File_Location.text():
+    def ValidateMinimumFileInput(self):
+        if not self.FileLocation.text():
             return "Missing file name"
         return "Success"
 
-    def Validate_Local_File_Input(self, Single):
-        if not self.File_Location.text():
+    def ValidateLocalFileInput(self, Single):
+        if not self.FileLocation.text():
             return "Missing file name"
-        if len(os.listdir(self.Client_Storage_Path_Field.text())) <= 0:
+        if len(os.listdir(self.ClientStoragePathField.text())) <= 0:
             return "Local storage path is empty"
         if Single:
-            if not os.path.exists(self.Client_Storage_Path_Field.text() + self.File_Location.text()):
+            if not os.path.exists(self.ClientStoragePathField.text() + self.FileLocation.text()):
                 return "File does not exist in local storage path"
         return "Success"
 
-    def Validate_File_Input(self):
-        if not self.File_Location.text():
+    def ValidateFileInput(self):
+        if not self.FileLocation.text():
             return "Missing file name"
-        if not self.Keyword_Input.text():
-            return "Missing field name"
-        if not self.Key_Input.text():
+        if not self.KeywordInput.text():
+            return "Missing field name(s)"
+        if not self.KeyInput.text():
             return "Missing AES key"
-        if len(self.Key_Input.text()) != 16:
+        if len(self.KeyInput.text()) != 16:
             return "Keys require 16 characters"
         return "Success"
 
-    def Validate_List_Input(self):
-        if not self.File_Location.text():
+    def ValidateListInput(self):
+        if not self.FileLocation.text():
             return "Missing file name"
-        if not self.Key_Input.text():
+        if not self.KeyInput.text():
             return "Missing key"
-        if len(self.Key_Input.text()) != 16:
+        if len(self.KeyInput.text()) != 16:
             return "Keys require 16 characters"
         return "Success"
 
-    def Validate_Terminal_Executable(self):
+    def ValidateTerminalExecutable(self):
         if sys.platform == "win32":     #Putty required
             try:
                 if(shutil.which("putty.exe")):     #Check for existance of putty installation
                     return "Success"
                 else:                              #If no install exists, notify user of how to install 
-                    self.Clear_Logs()
+                    self.ClearLogs()
                     logging.warning("Putty was not found")
-                    logging.info("Download it " + LINK_TEMPLATE.format(PUTTY_DOWNLOAD_LINK, "Here"))
+                    logging.info("Download it " + Constants.LINKTEMPLATE.format(Constants.PUTTYDOWNLOADLINK, "Here"))
             except Exception as EX:
-                logging.error(ERROR_TEMPLATE.format(type(EX).__name__, EX.args)) 
+                logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args)) 
         elif sys.platform == 'linux':   #SSHPass required
             try:
-                Value = subprocess.check_output("dpkg -s sshpass", shell=True).decode('utf-8')
+                Value = subprocess.checkoutput("dpkg -s sshpass", shell=True).decode('utf-8')
                 if 'install ok' in Value:
                     return "Success"
                 else:
@@ -608,103 +578,103 @@ class SSHClientMainWindow(QMainWindow):
                 logging.error("'sshpass' not installed")
                 logging.info("run 'sudo apt install sshpass'")
             except Exception as EX:
-                logging.error(ERROR_TEMPLATE.format(type(EX).__name__, EX.args)) 
+                logging.error(ERRORTEMPLATE.format(type(EX).name, EX.args)) 
 
-    def Terminal_Button_Pressed(self):
-        DIV = self.Validate_Server_Input(Full=True)
+    def TerminalButtonPressed(self):
+        DIV = self.ValidateServerInput(Full=True)
         if DIV == "Success":
-            PIV = self.Validate_Terminal_Executable()
+            PIV = self.ValidateTerminalExecutable()
             if PIV == "Success":
-                self.Open_Terminal_Instance()
+                self.OpenTerminalInstance()
         else:
             logging.warning(DIV)    
 
-    def Execute_Button_Pressed(self):
-        self.Clear_Logs()
-        Request_Type = self.Operation_Action_Combobox.currentIndex()
-        Operation = self.Operation_Combobox.currentIndex()
-        if Request_Type == 0:         #Fetch_Button Sever Request 
+    def ExecuteButtonPressed(self):
+        self.ClearLogs()
+        RequestType = self.OperationActionCombobox.currentIndex()
+        Operation = self.OperationCombobox.currentIndex()
+        if RequestType == 0:         #FetchButton Sever Request 
             if Operation == 0:        #Request Value
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_File_Input()
+                    FIV = self.ValidateFileInput()
                     if FIV == "Success":
-                        self.Connect_To_Server_Fetch_Value()
+                        self.ConnectToServerFetchValue()
                     else:
                         logging.info(FIV)
                 else:
                     logging.info(DIV)
             elif Operation == 1:      #Request List
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_List_Input()
+                    FIV = self.ValidateListInput()
                     if FIV == "Success":
-                        self.Connect_To_Server_Fetch_Keyword_List()
+                        self.ConnectToServerFetchKeywordList()
                     else:
                         logging.info(FIV)
                 else:
                     logging.info(DIV)
             elif Operation == 2:      #Request File
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_Minimum_File_Input()
+                    FIV = self.ValidateMinimumFileInput()
                     if FIV == "Success":
-                        self.Connect_To_Server_Fetch_File("FetchSingle")
+                        self.ConnectToServerFetchFile("FetchSingle")
                     else:
                         logging.info(FIV)
                 else:
                     logging.info(DIV)
             elif Operation == 3:      #Request Entire Directory
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_Minimum_File_Input()
+                    FIV = self.ValidateMinimumFileInput()
                     if FIV == "Success":
-                        self.Connect_To_Server_Fetch_File("FetchAll")
+                        self.ConnectToServerFetchFile("FetchAll")
                     else:
                         logging.info(FIV)
                 else:
                     logging.info(DIV)
             elif Operation == 4:      #Request File List
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    self.Connect_To_Server_Fetch_File_List()
+                    self.ConnectToServerFetchFileList()
                 else:
                     logging.info(DIV)
             elif Operation == 5:      #Request Disk Info
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    self.Connect_To_Server_Fetch_Disk_Info()
+                    self.ConnectToServerFetchDiskInfo()
                 else:
                     logging.info(DIV)
             elif Operation == 6:      #Request Logs
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    self.Connect_To_Server_Fetch_SSH_Logs()
+                    self.ConnectToServerFetchSSHLogs()
                 else:
                     logging.info(DIV)
-        elif Request_Type == 1:       #Send to Server Request
+        elif RequestType == 1:       #Send to Server Request
             if Operation == 0:        #Send File
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_Local_File_Input(Single=True)
+                    FIV = self.ValidateLocalFileInput(Single=True)
                     if FIV == "Success":
-                        self.Connect_To_Server_Send_File("SendSingle")
+                        self.ConnectToServerSendFile("SendSingle")
                     else:
                         logging.info(FIV)
                 else:
                     logging.info(DIV)
             elif Operation == 1:      #Send Entire Directory
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
-                    FIV = self.Validate_Local_File_Input(Single=False)
+                    FIV = self.ValidateLocalFileInput(Single=False)
                     if FIV == "Success":
-                        self.Connect_To_Server_Send_File("SendAll")
+                        self.ConnectToServerSendFile("SendAll")
                     else:
                         logging.info(FIV)
                 else:
                     logging.info(DIV)
             elif Operation == 2:      #Update Server Time
-                DIV = self.Validate_Server_Input(Full=True)
+                DIV = self.ValidateServerInput(Full=True)
                 if DIV == "Success":
                     Command = "\n".join(
                         [   "echo Old",
@@ -713,252 +683,261 @@ class SSHClientMainWindow(QMainWindow):
                             "sudo date --set='" + time.strftime("%m/%d/%Y %H:%M:%S", time.localtime()) + "'",
                         ]
                     )
-                    self.Connect_To_Server_Generic_Request(Command)
+                    self.ConnectToServerGenericRequest(Command)
                 else:
                     logging.info(DIV)
             elif Operation == 3:      #Ping Server
-                DIV = self.Validate_Server_Input(Full=False)
+                DIV = self.ValidateServerInput(Full=False)
                 if DIV == "Success":
-                    self.Connect_And_Ping_Server()
+                    self.ConnectAndPingServer()
                 else:
                     logging.info(DIV)
                                     
-    def Clear_Close(self):
-        self.Clear_Clipboard()
+    def ClearClose(self):
+        self.ClearClipboard()
         self.close()
 
-    def Append_Date_Update(self, Command):
+    def AppendDateUpdate(self, Command):
         return "\n".join([("sudo date --set='" + time.strftime("%m/%d/%Y %H:%M:%S", time.localtime()) + "' > /dev/null 2>&1"), Command])
 
-    def Connect_To_Server_Generic_Request(self, Command):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
+    def ConnectToServerGenericRequest(self, Command):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)                 
-        self.PWorker.data.connect(self.Connect_To_Server_Generic_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServer)                 
+        self.PWorker.data.connect(self.ConnectToServerGenericResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
         
-    def Connect_To_Server_Fetch_Value(self):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
-        Keyword_Input_Argument = self.Keyword_Input.text().replace(" ", "<>")          #Filter keyword
-        File_Location_Argument = self.File_Location.text().replace(" ", "<>")          #Filter location file
-        Command = self.Append_Date_Update("./AutoRun.sh fetch '" + File_Location_Argument + "' '" + Keyword_Input_Argument + "' '" + self.Key_Input.text() + "'")
+    def ConnectToServerFetchValue(self):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
+        KeywordInputArgument = self.KeywordInput.text().replace(" ", "<>")          #Filter keyword
+        FileLocationArgument = self.FileLocation.text().replace(" ", "<>")          #Filter location file
+        Command = self.AppendDateUpdate("./AutoRun.sh fetch '" + FileLocationArgument + "' '" + KeywordInputArgument + "' '" + self.KeyInput.text() + "'")
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)                 
-        self.PWorker.data.connect(self.Print_SSH_Value_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServer)                 
+        self.PWorker.data.connect(self.PrintSSHValueResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
 
-    def Connect_To_Server_Fetch_Keyword_List(self):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
-        File_Location_Argument = self.File_Location.text().replace(" ", "<>")          #Filter location file
-        Command = self.Append_Date_Update("./AutoRun.sh list '" + File_Location_Argument + "' 'placeholder' '" + self.Key_Input.text() + "'")
+    def ConnectToServerFetchKeywordList(self):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
+        FileLocationArgument = self.FileLocation.text().replace(" ", "<>")          #Filter location file
+        Command = self.AppendDateUpdate("./AutoRun.sh list '" + FileLocationArgument + "' 'placeholder' '" + self.KeyInput.text() + "'")
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)                 
-        self.PWorker.data.connect(self.Connect_To_Server_Generic_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServer)                 
+        self.PWorker.data.connect(self.ConnectToServerGenericResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
 
-    def Connect_To_Server_Fetch_Disk_Info(self):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
-        Command = self.Append_Date_Update("df -h")
+    def ConnectToServerFetchDiskInfo(self):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
+        Command = self.AppendDateUpdate("df -h")
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)              
-        self.PWorker.data.connect(self.Print_Disk_Info_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServer)              
+        self.PWorker.data.connect(self.PrintDiskInfoResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
         
-    def Connect_To_Server_Fetch_SSH_Logs(self):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
-        Command = self.Append_Date_Update("cat /var/log/auth.log | grep 'Failed\|Accepted'")
+    def ConnectToServerFetchSSHLogs(self):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
+        Command = self.AppendDateUpdate("cat /var/log/auth.log | grep 'Failed\|Accepted'")
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=Command)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)              
-        self.PWorker.data.connect(self.Print_SSH_Fetch_Log_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServer)              
+        self.PWorker.data.connect(self.PrintSSHFetchLogResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
         
-    def Connect_To_Server_Fetch_File(self, Type):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
+    def ConnectToServerFetchFile(self, Type):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), self.Fetch_Server_Storage_Path(), self.Fetch_Client_Storage_Path(), F=self.File_Location.text(), T=Type)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), self.FetchServerStoragePath(), self.FetchClientStoragePath(), F=self.FileLocation.text(), T=Type)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server_Transfer)                 
-        self.PWorker.data.connect(self.Print_SSH_Fetch_File_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServerTransfer)                 
+        self.PWorker.data.connect(self.PrintSSHFetchFileResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
         
-    def Connect_To_Server_Fetch_File_List(self):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
+    def ConnectToServerFetchFileList(self):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), C=("tree " + self.Fetch_Server_Storage_Path()))
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), C=("tree -a -v -N -L 1 " + self.FetchServerStoragePath()))
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server)             
-        self.PWorker.data.connect(self.Connect_To_Server_Generic_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServer)             
+        self.PWorker.data.connect(self.ConnectToServerGenericResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
     
-    def Connect_To_Server_Send_File(self, Type):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        logging.info("Attempting SSH to " + self.Server_Name.text())
+    def ConnectToServerSendFile(self, Type):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        logging.info("Attempting SSH to " + self.ServerName.text())
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text(), self.Fetch_Server_Storage_Path(), self.Fetch_Client_Storage_Path(), F=self.File_Location.text(), T=Type)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), self.FetchServerStoragePath(), self.FetchClientStoragePath(), F=self.FileLocation.text(), T=Type)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Connect_And_Run_Server_Transfer)               
-        self.PWorker.data.connect(self.Print_SSH_Send_File_Results)
+        self.PThread.started.connect(self.PWorker.ConnectAndRunServerTransfer)               
+        self.PWorker.data.connect(self.PrintSSHSendFileResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
 
-    def Connect_And_Ping_Server(self):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
-        Host = self.Server_Name.text()
+    def ConnectAndPingServer(self):
+        self.ButtonToggle(False)
+        self.ClearLogs()
+        Host = self.ServerName.text()
         logging.info("Attempting to ping " + Host)
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, Host)
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, Host)
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Ping_Server)
-        self.PWorker.data.connect(self.Print_Ping_Results)
+        self.PThread.started.connect(self.PWorker.PingServer)
+        self.PWorker.data.connect(self.PrintPingResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
                 
-    def Open_Terminal_Instance(self):
-        self.Button_Toggle(False)
-        self.Clear_Logs()
+    def OpenTerminalInstance(self):
+        self.ButtonToggle(False)
+        self.ClearLogs()
         self.PThread = QThread(self)
-        self.PWorker = QTW.QThreadWorker(self.SSH_Object, self.Server_Name.text(), self.Server_Input.text(), self.Server_Password.text())
+        self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text())
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.Run_Terminal_Instance)
-        self.PWorker.data.connect(self.Print_Terminal_Opening_Results)
+        self.PThread.started.connect(self.PWorker.RunTerminalInstance)
+        self.PWorker.data.connect(self.PrintTerminalOpeningResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
                 
     @pyqtSlot(QUrl)
-    def Copy_Or_Open_Link(self, params):
+    def CopyOrOpenLink(self, params):
         try:
-            URL_String = QUrl.fromPercentEncoding(params.toString().encode('utf8')).strip()
-            if re.match(URL_REGEX, URL_String) is not None \
-                and URL_String[0] != '#':                      #Value is a link    
-                    webbrowser.open(URL_String)
-            elif URL_String[0] == '#':                         #Value is a string
-                pyperclip.copy(URL_String[1:])     
+            URLString = QUrl.fromPercentEncoding(params.toString().encode('utf8')).strip()
+            if re.match(Constants.URLREGEX, URLString) is not None \
+                and URLString[0] != '#':                      #Value is a link    
+                    webbrowser.open(URLString)
+            elif URLString[0] == '#':                         #Value is a string
+                pyperclip.copy(URLString[1:])     
             else:                                              #Value is invalid/unknown
-                raise Exception("Invalid value passed to 'Copy_Or_Open_Link' method")   
+                raise Exception("Invalid value passed to 'CopyOrOpenLink' method")   
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
 
     @pyqtSlot(list)
-    def Connect_To_Server_Generic_Results(self, params):
+    def ConnectToServerGenericResults(self, params):
         try:
-            if not self.Includes_Errors(params):                 #If no errors were thrown 
-                stdoutstring, stderrstring = self.Format_Lists(params[1], params[2])
+            if not self.IncludesErrors(params):                 #If no errors were thrown 
+                stdoutstring, stderrstring = self.FormatLists(params[1], params[2])
                 logging.debug("=== Server Response Begin ===")   
                 for i in stdoutstring:                           #Output server response
                     if i != " ":
-                        logging.debug(self.Format_Response(i))
+                        logging.debug(self.FormatResponse(i))
                 for j in stderrstring:                           #Output server side error(s) (if any)
                     if j != " ":
                         if(j.__contains__("INFO:root")):
-                            logging.info(self.Format_Response(j))
+                            logging.info(self.FormatResponse(j))
                         elif(j.__contains__("WARNING:root")):
-                            logging.warning(self.Format_Response(j))
+                            logging.warning(self.FormatResponse(j))
                         elif(j.__contains__("ERROR:root")):
-                            logging.error(self.Format_Response(j))
+                            logging.error(self.FormatResponse(j))
                 logging.debug("=== Server Response End ===")  
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
+                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
-        self.Button_Toggle(True)
+        self.ButtonToggle(True)
 
     @pyqtSlot(list)
-    def Print_SSH_Value_Results(self, params):
+    def PrintSSHValueResults(self, params):
         try:
-            if not self.Includes_Errors(params):    
-                stdoutstring, stderrstring = self.Format_Lists(params[1], params[2])
-                Last_String = (
-                    stdoutstring.pop() if (len(stdoutstring) > 0 and "Pair found: " in stdoutstring[-1]) 
-                                        or (len(stdoutstring) > 0 and "pair(s) found: " in stdoutstring[-1])
-                    else "ERROR"
-                )
-                logging.debug("=== Server Response Begin ===")                             #Output server response
+            if not self.IncludesErrors(params):    
+                stdoutstring, stderrstring = self.FormatLists(params[1], params[2])
+                stdoutstringsanitized = []
+                stderrstringsanitized = list(set(stderrstring))     #Remove duplicate errors 
+
+                #Seperate values with log information
+                Results = [v for v in stdoutstring if (len(stdoutstring) > 0 and "Pair found: " in v) or (len(stdoutstring) > 0 and "pair(s) found: " in v)]
+                
+                #Replace actual values with generic log information
                 for i in stdoutstring:
-                    if(i != ''):    
-                        logging.debug(self.Format_Response(i))
-                for j in stderrstring:
-                    if(j != ''):    
-                        if(j.__contains__("INFO:root")):
-                            logging.info(self.Format_Response(j))
-                        elif(j.__contains__("WARNING:root")):
-                            logging.warning(self.Format_Response(j))
-                        elif(j.__contains__("ERROR:root")):
-                            logging.error(self.Format_Response(j))
+                    if (len(stdoutstring) > 0 and "Pair found: " in i) or (len(stdoutstring) > 0 and "pair(s) found: " in i):
+                        stdoutstringsanitized.append("INFO:root:Pair(s) found")
+                    else:
+                        stdoutstringsanitized.append(i)
+                                
+                #Output server response
+                logging.debug("=== Server Response Begin ===")     
+                if len(stderrstringsanitized) > 0:                   
+                    for j in stderrstringsanitized:
+                        if(j != ''):    
+                            if(j.__contains__("INFO:root")):
+                                logging.info(self.FormatResponse(j))
+                            elif(j.__contains__("WARNING:root")):
+                                logging.warning(self.FormatResponse(j))
+                            elif(j.__contains__("ERROR:root")):
+                                logging.error(self.FormatResponse(j))
+                else:                   
+                    for i in stdoutstringsanitized:
+                        if(i != ''):    
+                            logging.debug(self.FormatResponse(i))
                 logging.debug("=== Server Response End ===")
-                if "ERROR" not in Last_String and "WARNING" not in Last_String:           #If no server scripting errors
-                    if "Pair found: " in Last_String:                                     #If desired keyword was found and has a single value
-                        Pair = Last_String.split("Pair found: ")[1]
-                        Keystring = Pair.split(' - ')[0].strip()[1:]                      #Chops off starting bracket
-                        Desired_String = Pair.split(' - ')[1].strip()[:-1]                #Chops off ending bracket
-                        Colored_Keystring = "<span style='color:#ffa02f;'>" + Keystring + "</span>"
-                        if self.Toggle_Copy_Menu_Option.isChecked():                      #If auto copy is enabled
-                            logging.info("Value for " + Colored_Keystring + " was retrieved")
-                            logging.info("Copying to the clipboard ...")
-                            pyperclip.copy(Desired_String)
-                        else:
-                            hiddenvalue = LINK_TEMPLATE.format(("#" + Desired_String), "Copy")
-                            logging.info("Value for " + Colored_Keystring)
-                            logging.info("└── " + hiddenvalue)
-                    elif "pair(s) found: " in Last_String:                                #If desired keyword was found and has multiple values
-                        Pair_Split = Last_String.split(" pair(s) found: ")
-                        Keystring = Pair_Split[0].replace("INFO:root:", "").strip()
-                        Desired_Strings = Pair_Split[1].split(" <> ")
-                        Desired_Strings_No_Blanks = [i.strip() for i in Desired_Strings if not i.isspace()]   
-                        Colored_Keystring = "<span style='color:#ffa02f;'>" + Keystring + "</span>"
-                        logging.info("Data was retrieved")                     
-                        logging.info("Value(s) for " + Colored_Keystring)
-                        for i in Desired_Strings_No_Blanks:                               #List out keywords and give a copy link for each value
-                            pairlist = i[1:][:-1].split(" - ")
-                            lineicon = "└── " if Desired_Strings_No_Blanks.index(i) == len(Desired_Strings_No_Blanks) - 1 else "├── "
-                            hiddenvalue = LINK_TEMPLATE.format(("#" + pairlist[1]), "Copy")
-                            logging.info(lineicon + pairlist[0] + " - " + hiddenvalue)
+
+                #Output each relevant server data result
+                for IndResult in Results:
+                    if "ERROR" not in IndResult and "WARNING" not in IndResult:               #If no server scripting errors
+                        if "Pair found: " in IndResult:                                       #If desired keyword was found and has a single value
+                            Pair = IndResult.split("Pair found: ")[1]
+                            Keystring = Pair.split(' - ')[0].strip()[1:]                      #Chops off starting bracket
+                            DesiredString = Pair.split(' - ')[1].strip()[:-1]                 #Chops off ending bracket
+                            ColoredKeystring = "<span style='color:#ffa02f;'>" + Keystring + "</span>"
+                            HiddenValue = Constants.LINKTEMPLATE.format(("#" + DesiredString), "Copy")
+                            logging.info("Value for " + ColoredKeystring)
+                            logging.info("└── " + HiddenValue)
+                        elif "pair(s) found: " in IndResult:                                  #If desired keyword was found and has multiple values
+                            PairSplit = IndResult.split(" pair(s) found: ")
+                            Keystring = PairSplit[0].replace("INFO:root:", "").strip()
+                            DesiredStrings = PairSplit[1].split(" <> ")
+                            DesiredStringsNoBlanks = [i.strip() for i in DesiredStrings if not i.isspace()]   
+                            ColoredKeystring = "<span style='color:#ffa02f;'>" + Keystring + "</span>"
+                            logging.info("Value(s) for " + ColoredKeystring)
+                            for i in DesiredStringsNoBlanks:                                 #List out keywords and give a copy link for each value
+                                PairList = i[1:][:-1].split(" - ")
+                                LineIcon = "└── " if DesiredStringsNoBlanks.index(i) == len(DesiredStringsNoBlanks) - 1 else "├── "
+                                HiddenValue = Constants.LINKTEMPLATE.format(("#" + PairList[1]), "Copy")
+                                logging.info(LineIcon + PairList[0] + " - " + HiddenValue)
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
+                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
+
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
-        self.Button_Toggle(True)
+        self.ButtonToggle(True)
 
     @pyqtSlot(list)
-    def Print_Disk_Info_Results(self, params):
+    def PrintDiskInfoResults(self, params):
         try:
-            if not self.Includes_Errors(params):    
+            if not self.IncludesErrors(params):    
                 logging.debug("=== Server Response Begin ===")   
                 stdinstring, stdoutstring, stderrstring, runtime = params[0], params[1], params[2], params[3]
                 Headers = stdoutstring[0].replace("on", "").split()                          #Headers
@@ -972,122 +951,122 @@ class SSHClientMainWindow(QMainWindow):
                 logging.debug("=== Server Response End ===")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
-        self.Button_Toggle(True)
+        self.ButtonToggle(True)
         
     @pyqtSlot(list)
-    def Print_SSH_Fetch_Log_Results(self, params):
+    def PrintSSHFetchLogResults(self, params):
         try:
-            if not self.Includes_Errors(params):                 #If no errors were thrown 
-                Filename = "Server_Logs.log"
-                stdoutstring, stderrstring = self.Format_Lists(params[1], params[2])
+            if not self.IncludesErrors(params):                 #If no errors were thrown 
+                Filename = "ServerLogs.log"
+                stdoutstring, stderrstring = self.FormatLists(params[1], params[2])
                 if stdoutstring:
-                    Invalid_Users = [i for i in stdoutstring if "invalid user" in i]
-                    Failed_Logins = [j for j in stdoutstring if "Failed password" in j and "invalid user" not in j]
-                    Successful_Logins = [k for k in stdoutstring if "Accepted password" in k]
-                    Colored_Filename = "<span style='color:#ffa02f;'>" + Filename + "</span>"
+                    InvalidUsers = [i for i in stdoutstring if "invalid user" in i]
+                    FailedLogins = [j for j in stdoutstring if "Failed password" in j and "invalid user" not in j]
+                    SuccessfulLogins = [k for k in stdoutstring if "Accepted password" in k]
+                    ColoredFilename = "<span style='color:#ffa02f;'>" + Filename + "</span>"
                     with open("Files/Storage/" + Filename, "w") as File:    #Write logs to local file
                         File.write("----------------------------------------------------------------------------------\n")
                         File.write("Invalid User Login Attempts\n")
                         File.write("----------------------------------------------------------------------------------\n")
-                        for i in Invalid_Users:
+                        for i in InvalidUsers:
                             File.write(i)
                         File.write("----------------------------------------------------------------------------------\n")
                         File.write("Failed Password Login Attempts\n")
                         File.write("----------------------------------------------------------------------------------\n")
-                        for j in Failed_Logins:
+                        for j in FailedLogins:
                             File.write(j)
                         File.write("----------------------------------------------------------------------------------\n")
                         File.write("Successful Login Attempts\n")
                         File.write("----------------------------------------------------------------------------------\n")
-                        for k in Successful_Logins:
+                        for k in SuccessfulLogins:
                             File.write(k)
                     logging.info("The following file(s) generated")
-                    logging.info("└── " + Colored_Filename)
-                    logging.info("Logs were put into '" + os.path.basename(os.path.normpath(self.Fetch_Client_Storage_Path())) + "'")
+                    logging.info("└── " + ColoredFilename)
+                    logging.info("Logs were put into '" + os.path.basename(os.path.normpath(self.FetchClientStoragePath())) + "'")
                     logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
+                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
-        self.Button_Toggle(True)
+        self.ButtonToggle(True)
         
     @pyqtSlot(list)
-    def Print_SSH_Fetch_File_Results(self, params):
+    def PrintSSHFetchFileResults(self, params):
         try:
-            if not self.Includes_Errors(params):                 #If no errors were thrown 
-                Server_Space = params[0].pop()
+            if not self.IncludesErrors(params):                 #If no errors were thrown 
+                ServerSpace = params[0].pop()
                 logging.info("The following file(s) retrieved")
                 params[0].sort()
                 for i in params[0]:
-                    Line_Icon = "└── " if params[0].index(i) == len(params[0]) - 1 else "├── "
-                    Colored_Filename = "<span style='color:#ffa02f;'>" + os.path.basename(i) + "</span>"
-                    logging.info(Line_Icon + Colored_Filename)
-                logging.info("Files were put into '" + os.path.basename(os.path.normpath(self.Fetch_Client_Storage_Path())) + "'")
+                    LineIcon = "└── " if params[0].index(i) == len(params[0]) - 1 else "├── "
+                    ColoredFilename = "<span style='color:#ffa02f;'>" + os.path.basename(i) + "</span>"
+                    logging.info(LineIcon + ColoredFilename)
+                logging.info("Files were put into '" + os.path.basename(os.path.normpath(self.FetchClientStoragePath())) + "'")
                 logging.info("NOTE: Files were put into the same configuration as the server")
-                logging.info("Remaining available server storage: " + Server_Space[3] + "b [" + Server_Space[4] + " Used]")
+                logging.info("Remaining available server storage: " + ServerSpace[3] + "b [" + ServerSpace[4] + " Used]")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                 logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
+                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
-        self.Button_Toggle(True)
+        self.ButtonToggle(True)
                     
     @pyqtSlot(list)
-    def Print_SSH_Send_File_Results(self, params):
+    def PrintSSHSendFileResults(self, params):
         try:
-            if not self.Includes_Errors(params):                 #If no errors were thrown 
-                Server_Space = params[0].pop()
+            if not self.IncludesErrors(params):                 #If no errors were thrown 
+                ServerSpace = params[0].pop()
                 logging.info("The following file(s) sent")
                 params[0].sort()
                 for i in params[0]:                             #Output the successfully sent files
-                    Line_Icon = "└── " if params[0].index(i) == len(params[0]) - 1 else "├── "
-                    Colored_Filename = "<span style='color:#ffa02f;'>" + os.path.basename(i) + "</span>"
-                    logging.info(Line_Icon + Colored_Filename)
-                logging.info("Files were put into '" + os.path.basename(os.path.normpath(self.Fetch_Server_Storage_Path())) + "'")
+                    LineIcon = "└── " if params[0].index(i) == len(params[0]) - 1 else "├── "
+                    ColoredFilename = "<span style='color:#ffa02f;'>" + os.path.basename(i) + "</span>"
+                    logging.info(LineIcon + ColoredFilename)
+                logging.info("Files were put into '" + os.path.basename(os.path.normpath(self.FetchServerStoragePath())) + "'")
                 logging.info("NOTE: Files were put into the same configuration as the local directory")
-                logging.info("Remaining available server storage: " + Server_Space[3] + "b [" + Server_Space[4] + " Used]")
+                logging.info("Remaining available server storage: " + ServerSpace[3] + "b [" + ServerSpace[4] + " Used]")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                 logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
+                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
-        self.Button_Toggle(True)
+        self.ButtonToggle(True)
 
     @pyqtSlot(list)
-    def Print_Ping_Results(self, params):
+    def PrintPingResults(self, params):
         try:
-            if not self.Includes_Errors(params):                 #If no errors were thrown on ping attempt
-                Ping_List = [i.replace("\r", "") for i in str(params[0]).split('\n') if i != "\r"]
-                if(Ping_List.__contains__("Request timed out")):
+            if not self.IncludesErrors(params):                 #If no errors were thrown on ping attempt
+                PingList = [i.replace("\r", "") for i in str(params[0]).split('\n') if i != "\r"]
+                if(PingList.__contains__("Request timed out")):
                     logging.info("Request timed out: Server unreachable")
                 else:
-                    for i in Ping_List:
+                    for i in PingList:
                         logging.info(i)
             else:
-                logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
+                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("Ping completed")
-        self.Button_Toggle(True)
+        self.ButtonToggle(True)
 
     @pyqtSlot(list)
-    def Print_Terminal_Opening_Results(self, params):
+    def PrintTerminalOpeningResults(self, params):
         try:
-            if not self.Includes_Errors(params):                 #If no errors were thrown on ssh connection of putty instance
-                self.Clear_Logs()
+            if not self.IncludesErrors(params):                 #If no errors were thrown on ssh connection of putty instance
+                self.ClearLogs()
             else:
-                logging.error(str(type(params[0]).__name__) + ": " + str(params[0]))
+                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
         except Exception as E:
-            logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args)) 
-        self.Button_Toggle(True)
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+        self.ButtonToggle(True)
 
-    def Includes_Errors(self, list):
-        Possible_Exceptions = [Exception,
+    def IncludesErrors(self, list):
+        PossibleExceptions = [Exception,
                                TypeError,
                                FileNotFoundError,
                                FileExistsError,
@@ -1101,23 +1080,23 @@ class SSHClientMainWindow(QMainWindow):
                                SocketTimeout,
                                None]
         for i in list:
-            if type(i) in Possible_Exceptions:
+            if type(i) in PossibleExceptions:
                 return True
         return False
     
-    def Format_Lists(self, output, errors):
-        true_output = []
-        true_errors = []
+    def FormatLists(self, output, errors):
+        trueoutput = []
+        trueerrors = []
         for i in errors:    #Sets info values to new output value lsit
             if "ERROR:root:" not in i and "WARNING:root:" not in i and "bash: line 1" not in i and "ls: cannot access" not in i:          
-                true_output.append(i)  
+                trueoutput.append(i)  
             else:           #If errors
-                true_errors.append(i)
+                trueerrors.append(i)
         for j in output:    #Sets all output values into new output list
-            true_output.append(j)
-        return true_output, true_errors
+            trueoutput.append(j)
+        return trueoutput, trueerrors
     
-    def Format_Response(self, response):
+    def FormatResponse(self, response):
         return (
             response.replace("INFO:root:", "")
                 .replace("ERROR:root:", "")
@@ -1125,98 +1104,102 @@ class SSHClientMainWindow(QMainWindow):
                         .replace("\n", "")
         )
 
-    def Toggle_Fullscreen(self):
+    def ToggleFullscreen(self):
         self.showNormal() if self.isMaximized() else self.showMaximized()
             
-    def Toggle_Passwords(self):
-        if self.Server_Password.echoMode() == QLineEdit.Normal:
-            self.Server_Password.setEchoMode(QLineEdit.Password)
-            self.Key_Input.setEchoMode(QLineEdit.Password)
-        elif self.Server_Password.echoMode() == QLineEdit.Password:
-            self.Server_Password.setEchoMode(QLineEdit.Normal)
-            self.Key_Input.setEchoMode(QLineEdit.Normal)
+    def TogglePasswords(self):
+        if self.ServerPassword.echoMode() == QLineEdit.Normal:
+            self.ServerPassword.setEchoMode(QLineEdit.Password)
+            self.KeyInput.setEchoMode(QLineEdit.Password)
+        elif self.ServerPassword.echoMode() == QLineEdit.Password:
+            self.ServerPassword.setEchoMode(QLineEdit.Normal)
+            self.KeyInput.setEchoMode(QLineEdit.Normal)
 
-    def Toggle_Logging_Level(self, Level):
-        self.Clear_Logging_Options()
+    def ToggleLoggingLevel(self, Level):
+        self.ClearLoggingOptions()
         if Level == "Info":
-            self.Logger_Level_Menu_Option_Info.setChecked(True)
+            self.LoggerLevelMenuOptionInfo.setChecked(True)
             logging.getLogger("paramiko").setLevel(logging.INFO)
         elif Level == "Warning":
-            self.Logger_Level_Menu_Option_Warning.setChecked(True)
+            self.LoggerLevelMenuOptionWarning.setChecked(True)
             logging.getLogger("paramiko").setLevel(logging.WARNING)
         elif Level == "Error":
-            self.Logger_Level_Menu_Option_Error.setChecked(True)
+            self.LoggerLevelMenuOptionError.setChecked(True)
             logging.getLogger("paramiko").setLevel(logging.ERROR)
         elif Level == "Debug":
-            self.Logger_Level_Menu_Option_Debug.setChecked(True)
+            self.LoggerLevelMenuOptionDebug.setChecked(True)
             logging.getLogger("paramiko").setLevel(logging.DEBUG)
                                                 
-    def Button_Toggle(self, toggle):
-        GUI_Elements = [
-            self.Execute_Button,
-            self.Close_Button,
+    def ButtonToggle(self, toggle):
+        GUIElements = [
+            self.ExecuteButton,
+            self.CloseButton,
         ]
-        for i in GUI_Elements: 
+        for i in GUIElements: 
             i.setEnabled(toggle) 
             
-    def Operation_Action_Changed(self):
-        Text = self.Operation_Action_Combobox.currentText()
-        self.Operation_Combobox.clear()
+    def OperationActionChanged(self):
+        Text = self.OperationActionCombobox.currentText()
+        self.OperationCombobox.clear()
         for Item in self.REQUESTS[Text]:
-            self.Operation_Combobox.addItem(Item)
+            self.OperationCombobox.addItem(Item)
+
+    def OpenSecondaryWindow(self):
+        self.KeywordWindow = SubWindow.TextParsingWindow(self)
+        self.KeywordWindow.show()
             
-    def Open_Storage(self):
+    def OpenStorage(self):
         if sys.platform == "win32":
             try:
-                os.startfile(self.Fetch_Client_Storage_Path())
+                os.startfile(self.FetchClientStoragePath())
             except IOError as IO:
-                logging.error(ERROR_TEMPLATE.format(type(IO).__name__, IO.args)) 
+                logging.error(Constants.ERRORTEMPLATE.format(type(IO).name, IO.args)) 
         elif sys.platform == 'linux':
             try:
-                subprocess.call(('xdg-open ' + self.Fetch_Client_Storage_Path()), shell=True)
+                subprocess.call(('xdg-open ' + self.FetchClientStoragePath()), shell=True)
             except IOError as IO:
-                logging.error(ERROR_TEMPLATE.format(type(IO).__name__, IO.args)) 
+                logging.error(ERRORTEMPLATE.format(type(IO).name, IO.args)) 
 
-    def Fetch_Server_Storage_Path(self):
-        return self.Server_Storage_Path_Field.text()
+    def FetchServerStoragePath(self):
+        return self.ServerStoragePathField.text()
 
-    def Fetch_Client_Storage_Path(self):
-        return self.Client_Storage_Path_Field.text()
+    def FetchClientStoragePath(self):
+        return self.ClientStoragePathField.text()
 
-    def Fetch_Logging_Level(self):
-        if self.Logger_Level_Menu_Option_Info.isChecked():
+    def FetchLoggingLevel(self):
+        if self.LoggerLevelMenuOptionInfo.isChecked():
             return "Info"
-        elif self.Logger_Level_Menu_Option_Warning.isChecked():
+        elif self.LoggerLevelMenuOptionWarning.isChecked():
             return "Warning"
-        elif self.Logger_Level_Menu_Option_Error.isChecked():
+        elif self.LoggerLevelMenuOptionError.isChecked():
             return "Error"
-        elif self.Logger_Level_Menu_Option_Debug.isChecked():
+        elif self.LoggerLevelMenuOptionDebug.isChecked():
             return "Debug"
         else:   #Default to debug
             return "Debug"
 
-    def Clear_Logs_And_Save(self):
-        self.Clear_Logs()
-        self.Save_Settings()
+    def ClearLogsAndSave(self):
+        self.ClearLogs()
+        self.SaveSettings()
 
-    def Clear_Logs(self):
+    def ClearLogs(self):
         self.LogEdit.clear()
 
-    def Clear_Logging_Options(self):
-        self.Logger_Level_Menu_Option_Error.setChecked(False)
-        self.Logger_Level_Menu_Option_Info.setChecked(False)
-        self.Logger_Level_Menu_Option_Warning.setChecked(False)
-        self.Logger_Level_Menu_Option_Debug.setChecked(False)
+    def ClearLoggingOptions(self):
+        self.LoggerLevelMenuOptionError.setChecked(False)
+        self.LoggerLevelMenuOptionInfo.setChecked(False)
+        self.LoggerLevelMenuOptionWarning.setChecked(False)
+        self.LoggerLevelMenuOptionDebug.setChecked(False)
 
-    def Clear_Clipboard(self):
+    def ClearClipboard(self):
         pyperclip.copy('')
                                             
 if __name__ == "__main__":
-    Stylesheet_Path = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Stylesheets/Dark_Theme.css").replace("\\", "/")
-    if not os.path.exists(Stylesheet_Path): 
-        logging.warning("Stylesheet Path: " + Stylesheet_Path + " could not be located")
+    StylesheetPath = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Stylesheets/Dark_Theme.css").replace("\\", "/")
+    if not os.path.exists(StylesheetPath): 
+        logging.warning("Stylesheet Path: " + StylesheetPath + " could not be located")
     else:
-        with open(Stylesheet_Path) as Stylesheet:
+        with open(StylesheetPath) as Stylesheet:
             app = QApplication(sys.argv)
             app.setStyleSheet(Stylesheet.read())
             Main = SSHClientMainWindow()

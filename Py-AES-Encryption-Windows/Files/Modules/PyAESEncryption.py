@@ -1,3 +1,43 @@
+""" 
+    File Encryption Module
+
+    Bugs
+        -N/A
+
+    Required Software
+        -Python 
+            -Version >= 3.6
+            -Installation: https://www.python.org/downloads/
+        -Python Modules
+            -Cryptodomex 
+                -Purpose: 256-Bit AES
+                -Installation: https://pypi.org/project/pycryptodomex/
+            -PyPDF2
+                -Purpose: PDF Encryption
+                - Installation: https://pypi.org/project/PyPDF2/
+
+    Methods
+        -ProcessFile
+            -Main Method
+            -Decrypts a given file, checks for existance the local variable AES_Attr 
+                -Returns value pair(s) of given JSON data if keyword is found
+        -FetchTextList 
+            -Gets the first children of a given JSON keyword
+        -EncryptDirectory
+            -Encrypts a given directory with local variable AES_Key
+        -DecryptDirectory
+            -Decrypts a given directory with local variable AES_Key
+        -EncryptFile
+            -Encrypts a given file with AES 256
+            -Supports .txt, .json, and .pdf extensions
+        -DecryptFile
+            -Decrypts a given file with AES256
+            -Supports .txt, .json, and .pdf extensions
+        -DecryptText
+            -Decrypts the given file contents and returns them
+            -Supports .json extensions
+"""
+
 import sys
 import os
 import logging

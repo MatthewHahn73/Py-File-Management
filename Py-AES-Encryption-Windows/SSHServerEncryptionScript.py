@@ -148,8 +148,13 @@ if __name__ == "__main__":
                     Pair_Key = input("Enter pair attribute: ")
                 EO = PyAES.FileEncryption()
                 EO.Change_Key_To_Bytes(AES_Key)
-                EO.Change_Attr(Pair_Key)
-                EO.Process_File(Default_Dir)     
+                
+                #Potentially lookup multiple values
+                Keywords = Pair_Key.split("+")
+                for i in Keywords:
+                    if len(i) > 0:
+                        EO.Change_Attr(i.replace("<>", " "))
+                        EO.Process_File(Default_Dir)  
             except IOError as e:
                 logging.error(e.args)       
         elif(Op[0].lower() == 'e'):
@@ -191,8 +196,13 @@ if __name__ == "__main__":
                                 Pair_Key = args.attr
                                 EO = PyAES.FileEncryption()
                                 EO.Change_Key_To_Bytes(AES_Key)
-                                EO.Change_Attr(Pair_Key.replace("<>", " "))
-                                EO.Process_File(Default_File_Location)  
+
+                                #Potentially lookup multiple values
+                                Keywords = args.attr.split("+")
+                                for i in Keywords:
+                                    if len(i) > 0:
+                                        EO.Change_Attr(i.replace("<>", " "))
+                                        EO.Process_File(Default_File_Location)  
                             else:
                                 logging.error("Missing attribute parameter")
                         except IOError as e:

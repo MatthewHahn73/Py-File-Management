@@ -8,8 +8,6 @@ Current Bugs
         -Server restart will fix
 
 Future Features
-    -Add in a xml option along with json
-        -Don't need to discriminate which in option drop down
     -Give more detailed log information than just SSH logins when server log request is executed
     -Add in an option to allow for use of SSH certificates 
         -This will require some serious valiation checking on the client side to ensure the existing of the certs
@@ -21,7 +19,7 @@ Future Features
         -Doesn't work for file transfers, pings, or putty calls
     -Improve step by step logging information
         -Might be a good idea to log specifics of each file fetched/sent
-            -This will give the end user a better idea of their progress instead of long hang-ups without updates
+            -This will give the end user a better idea of their progress instead of long hang-ups without updates for long requests
 
 Required Software
     -Python 
@@ -467,7 +465,7 @@ class SSHClientMainWindow(QMainWindow):
                     raise KeyError("Missing 'Options' attribute in " + os.path.basename(os.path.normpath(FullPath)))
 
         except json.decoder.JSONDecodeError as JSONDE:
-            logging.error(Constants.ERRORTEMPLATE.format(type(JSONDE).name, JSONDE.args)) 
+            logging.error("Error in JSON decoding") 
             logging.warning("Some settings may not have loaded properly")
         except KeyError as KE:
             logging.error(Constants.ERRORTEMPLATE.format(type(KE).name, KE.args)) 
@@ -492,7 +490,6 @@ class SSHClientMainWindow(QMainWindow):
                     }, 
                     "Options" : {
                         "HidePasswords" : self.TogglePasswordsMenuOption.isChecked(),
-                        "AutoCopy" : self.ToggleCopyMenuOption.isChecked(),
                         "LoggingLevel" : self.FetchLoggingLevel()
                     }
                 }       
@@ -837,7 +834,9 @@ class SSHClientMainWindow(QMainWindow):
             elif URLString[0] == '#':                         #Value is a string
                 pyperclip.copy(URLString[1:])     
             else:                                              #Value is invalid/unknown
-                raise Exception("Invalid value passed to 'CopyOrOpenLink' method")   
+                raise Exception("Invalid value passed to 'CopyOrOpenLink' method")  
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
 
@@ -862,6 +861,8 @@ class SSHClientMainWindow(QMainWindow):
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
@@ -928,7 +929,8 @@ class SSHClientMainWindow(QMainWindow):
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
@@ -950,6 +952,8 @@ class SSHClientMainWindow(QMainWindow):
                         logging.debug(indent + Headers[j] + ": " + currentrow[j])
                 logging.debug("=== Server Response End ===")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
@@ -988,6 +992,8 @@ class SSHClientMainWindow(QMainWindow):
                     logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
@@ -1010,6 +1016,8 @@ class SSHClientMainWindow(QMainWindow):
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                  logging.error(str(type(params[0]).name) + ": " + str(params[0]))
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
@@ -1032,6 +1040,8 @@ class SSHClientMainWindow(QMainWindow):
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
                  logging.error(str(type(params[0]).name) + ": " + str(params[0]))
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("SSH connection closed")
@@ -1049,6 +1059,8 @@ class SSHClientMainWindow(QMainWindow):
                         logging.info(i)
             else:
                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         logging.info("Ping completed")
@@ -1061,6 +1073,8 @@ class SSHClientMainWindow(QMainWindow):
                 self.ClearLogs()
             else:
                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
+        except TypeError as E:
+            logging.error("TypeError when parsing server response") 
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
         self.ButtonToggle(True)

@@ -46,19 +46,17 @@ import getpass
 import argparse
 import logging
 import json
-from Files.Modules import \
-    PyAESEncryption as PyAES
+from Files.Modules import PyAESEncryption as PyAES
+from Files.Modules.Constants import Constants
 
-ERROR_TEMPLATE = "A {0} exception occurred. Arguments:\n{1!r}"
-
-def Walk_Through_Directory(Directory, DesiredFilename):
+def WalkThroughDirectory(Directory, DesiredFilename):
     try:
         for Root, Dir, Files in os.walk(Directory):
             for File in Files:
                 if DesiredFilename in File:
                     return os.path.join(Root, File)
     except Exception as E:
-        logging.error(ERROR_TEMPLATE.format(type(E).__name__, E.args))
+        logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args))
             
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AES File Encryption App')
@@ -73,19 +71,19 @@ if __name__ == "__main__":
         #Check the settings, create directory if not found
         logging.info("Checking settings ...")
         Path = os.path.dirname(os.path.realpath(__file__)) + "/Files/"
-        Storage_Path = Path + "Storage/"
-        Full_Path = os.path.dirname(os.path.realpath(__file__)) + "/Files/Settings.json"
+        StoragePath = Path + "Storage/"
+        FullPath = os.path.dirname(os.path.realpath(__file__)) + "/Files/Settings.json"
 
         if not os.path.exists(Path):            #If no folder, create one
             logging.info("No 'File' folder found; Creating one ...")
             os.makedirs(Path)
-        if not os.path.exists(Storage_Path):    #If no file storage folder, create one
+        if not os.path.exists(StoragePath):    #If no file storage folder, create one
             logging.info("No 'Storage' folder in directory. Creating one ...")
-            os.makedirs(Storage_Path)
-        if not os.path.exists(Full_Path):       #If no settings ini, create one; Default settings
+            os.makedirs(StoragePath)
+        if not os.path.exists(FullPath):       #If no settings ini, create one; Default settings
             logging.info("No 'Settings.json' file found; Creating one ...")
             try:
-                with open(Full_Path, 'w') as File: 
+                with open(FullPath, 'w') as File: 
                     Config = {
                         "HK" : "False",
                         "SPFL" : "False"
@@ -97,112 +95,120 @@ if __name__ == "__main__":
         #Check for default directory, prompt if not found
         logging.info("Checking for default directory ...")
         try:
-            with open(Full_Path, "r") as File:
+            with open(FullPath, "r") as File:
                 Settings = json.load(File)
-                HK_Setting = Settings["HK"]
-                SPFL_Setting = Settings["SPFL"]
+                HKSetting = Settings["HK"]
+                SPFLSetting = Settings["SPFL"]
         except IOError as e:
             logging.error(e.args)
         
-        Default_Dir = ""
-        if not os.path.exists(SPFL_Setting):    #Path does doesn't exist or is no longer valid
+        DefaultDir = ""
+        if not os.path.exists(SPFLSetting):    #Path does doesn't exist or is no longer valid
             logging.warning("Default path not found")
-            while(not os.path.exists(Default_Dir)):
-                Default_Dir = input("Enter full path to file: ")
-            Save_Dir = "z"
-            while(Save_Dir[0].lower() not in ('y', 'n')):
-                Save_Dir = input("Save this directory to settings (Y/N): ")
-            if(Save_Dir[0].lower() == 'y'):
+            while(not os.path.exists(DefaultDir)):
+                DefaultDir = input("Enter full path to file: ")
+            SaveDir = "z"
+            while(SaveDir[0].lower() not in ('y', 'n')):
+                SaveDir = input("Save this directory to settings (Y/N): ")
+            if(SaveDir[0].lower() == 'y'):
                 try:
-                    with open(Full_Path, "w") as File:
+                    with open(FullPath, "w") as File:
                         Config = {
                             "HK" : "False",
-                            "SPFL" : Default_Dir
+                            "SPFL" : DefaultDir
                         }       
                         File.write(json.dumps(Config))
                 except IOError as e:
                     logging.error(e.args)
         else:
-            logging.info("Default directory found at '" + SPFL_Setting + "'")
-            Default_Dir = SPFL_Setting
+            logging.info("Default directory found at '" + SPFLSetting + "'")
+            DefaultDir = SPFLSetting
             
         #Valid commands
-        Commands = (('e', 'd', 'f') if os.path.isfile(Default_Dir) else ('e', 'd'))
-        Commands_Text = "(encrypt, decrypt or fetch)" if os.path.isfile(Default_Dir) else "(encrypt or decrypt)"
+        Commands = (('e', 'd', 'f', 'l') if os.path.isfile(DefaultDir) else ('e', 'd'))
+        CommandsText = "(encrypt, decrypt, fetch, or list)" if os.path.isfile(DefaultDir) else "(encrypt or decrypt)"
         
         #Prompt for operation
         Op = "z"
         while(Op[0].lower() not in Commands):
-            Op = input("Enter operation " + Commands_Text + ": ")
+            Op = input("Enter operation " + CommandsText + ": ")
         
         #Prompt for AES key
-        AES_Key = ""
-        while(len(AES_Key) != 16):
-            AES_Key = getpass.getpass("Enter AES key (must be 16 characters): ")
+        AESKey = ""
+        while(len(AESKey) != 16):
+            AESKey = getpass.getpass("Enter AES key (must be 16 characters): ")
 
         #Check operation and run
         if(Op[0].lower() == 'f'):
             try:
-                Pair_Key = ""
-                while(len(Pair_Key) <= 0):
-                    Pair_Key = input("Enter pair attribute: ")
+                PairKey = ""
+                while(len(PairKey) <= 0):
+                    PairKey = input("Enter pair attribute: ")
                 EO = PyAES.FileEncryption()
-                EO.Change_Key_To_Bytes(AES_Key)
+                EO.ChangeKeyToBytes(AESKey)
                 
                 #Potentially lookup multiple values
-                Keywords = Pair_Key.split("+")
+                Keywords = PairKey.split("+")
                 for i in Keywords:
                     if len(i) > 0:
-                        EO.Change_Attr(i.replace("<>", " "))
-                        EO.Process_File(Default_Dir)  
+                        EO.ChangeAttr(i.replace("<>", " "))
+                        EO.ProcessFile(DefaultDir)  
             except IOError as e:
                 logging.error(e.args)       
         elif(Op[0].lower() == 'e'):
             try:
                 EO = PyAES.FileEncryption()
-                EO.Change_Key_To_Bytes(AES_Key)
-                if(os.path.isfile(Default_Dir)):
-                    EO.Encrypt_File(Default_Dir, True)    
-                elif(os.path.isdir(Default_Dir)):
-                    EO.Encrypt_Directory(Default_Dir)    
+                EO.ChangeKeyToBytes(AESKey)
+                if(os.path.isfile(DefaultDir)):
+                    EO.EncryptFile(DefaultDir, True)    
+                elif(os.path.isdir(DefaultDir)):
+                    EO.EncryptDirectory(DefaultDir)    
             except IOError as e:
                 logging.error(e.args)       
         elif(Op[0].lower() == 'd'):
             try:
                 EO = PyAES.FileEncryption()
-                EO.Change_Key_To_Bytes(AES_Key)
-                if(os.path.isfile(Default_Dir)):
-                    EO.Decrypt_File(Default_Dir, True, False)   
-                elif(os.path.isdir(Default_Dir)):
-                    EO.Decrypt_Directory(Default_Dir)    
+                EO.ChangeKeyToBytes(AESKey)
+                if(os.path.isfile(DefaultDir)):
+                    EO.DecryptFile(DefaultDir, True, False)   
+                elif(os.path.isdir(DefaultDir)):
+                    EO.DecryptDirectory(DefaultDir)    
             except IOError as e:
-                logging.error(e.args)       
+                logging.error(e.args)   
+        elif(Op[0].lower() == 'l'):
+            try:
+                EO = PyAES.FileEncryption()
+                EO.ChangeKeyToBytes(AESKey)
+                if(os.path.isfile(DefaultDir)):
+                    EO.FetchTextList(DefaultDir)   
+            except IOError as e:
+                logging.error(e.args)   
         else:
             logging.error("Unknown Operation Passed")
 
     elif ua.__contains__("FETCH") or ua.__contains__("LIST"):       #Command line for SSH app
         if args.file is not None:
-            Default_Dir = (os.getcwd() + "/Files/Storage/")
-            Default_File_Name = str(args.file).replace("<>", " ")
-            Default_File_Location = Walk_Through_Directory(Default_Dir, Default_File_Name)
+            DefaultDir = (os.getcwd() + "/Files/Storage/")
+            DefaultFileName = str(args.file).replace("<>", " ")
+            DefaultFileLocation = WalkThroughDirectory(DefaultDir, DefaultFileName)
 
-            if Default_File_Location:                               #Path exists, run code
-                logging.info("'" + Default_File_Name + "' found")
+            if DefaultFileLocation:                                 #Path exists, run code
+                logging.info("'" + DefaultFileName + "' found")
                 if(args.key is not None):                           #Check for existing parameters
-                    AES_Key = args.key
+                    AESKey = args.key
                     if(ua.__contains__("FETCH")):
                         try:
                             if args.attr is not None:                     
                                 Pair_Key = args.attr
                                 EO = PyAES.FileEncryption()
-                                EO.Change_Key_To_Bytes(AES_Key)
+                                EO.ChangeKeyToBytes(AESKey)
 
                                 #Potentially lookup multiple values
                                 Keywords = args.attr.split("+")
                                 for i in Keywords:
                                     if len(i) > 0:
-                                        EO.Change_Attr(i.replace("<>", " "))
-                                        EO.Process_File(Default_File_Location)  
+                                        EO.ChangeAttr(i.replace("<>", " "))
+                                        EO.ProcessFile(DefaultFileLocation)  
                             else:
                                 logging.error("Missing attribute parameter")
                         except IOError as e:
@@ -210,13 +216,13 @@ if __name__ == "__main__":
                     elif(ua.__contains__("LIST")):
                         try:
                             EO = PyAES.FileEncryption()
-                            EO.Change_Key_To_Bytes(AES_Key)
-                            EO.Fetch_Text_List(Default_File_Location)     
+                            EO.ChangeKeyToBytes(AESKey)
+                            EO.FetchTextList(DefaultFileLocation)     
                         except IOError as e:
                             logging.error(e.args)  
                 else:
                     logging.error("Missing key parameter")
             else:
-                logging.error("'" + Default_File_Name + "' couldn't be found in '" + Default_Dir + "'")
+                logging.error("'" + DefaultFileName + "' couldn't be found in '" + DefaultDir + "'")
         else:
             logging.error("Missing filename")

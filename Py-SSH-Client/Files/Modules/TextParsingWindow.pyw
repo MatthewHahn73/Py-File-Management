@@ -43,6 +43,9 @@ class TextParsingWindow(QMainWindow):
             logging.warning("Icon file couldn't be located")
         self.setWindowIcon(QIcon(IconPath))
 
+        #Update text field 
+        self.UpdateKeywords(self.MainWindow.KeywordInput.text())
+
         #Window Settings
         self.setWindowTitle(Constants.VERSIONNUMBER)
         self.setFixedSize(292, 180)
@@ -59,8 +62,18 @@ class TextParsingWindow(QMainWindow):
         try:
             UpdatedTotalStr = str(len([i.strip() for i in re.split("\n", raw) if len(i) != 0]))
             self.KeywordLabel.setText("Keywords (Current Total: " + UpdatedTotalStr + ")")
+        except TypeError as E:
+            logging.error(E) 
         except Exception as EX:
             logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args)) 
+
+    def UpdateKeywords(self, raw):
+        try:
+            [self.KeywordLineEdit.append(i) for i in raw.split("+")]
+        except TypeError as E:
+            logging.error(E) 
+        except Exception as EX:
+            logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args))     
     
     def SubmitKeywords(self, raw):
         try:
@@ -68,6 +81,8 @@ class TextParsingWindow(QMainWindow):
             self.MainWindow.KeywordInput.setText(UpdatedKeywordStr)
             self.MainWindow.KeywordInput.setCursorPosition(0)
             self.close()
+        except TypeError as E:
+            logging.error(E) 
         except Exception as EX:
             logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args))     
 

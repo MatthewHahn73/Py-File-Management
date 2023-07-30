@@ -20,6 +20,7 @@ Future Features
     -Improve step by step logging information
         -Might be a good idea to log specifics of each file fetched/sent
             -This will give the end user a better idea of their progress instead of long hang-ups without updates for long requests
+    -Add in option to remotely modify file, or send new json/xml keywords to an existing file
 
 Required Software
     -Python 
@@ -835,15 +836,14 @@ class SSHClientMainWindow(QMainWindow):
                 pyperclip.copy(URLString[1:])     
             else:                                              #Value is invalid/unknown
                 raise Exception("Invalid value passed to 'CopyOrOpenLink' method")  
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
     @pyqtSlot(list)
     def ConnectToServerGenericResults(self, params):
         try:
-            if not self.IncludesErrors(params):                 #If no errors were thrown 
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 stdoutstring, stderrstring = self.FormatLists(params[1], params[2])
                 logging.debug("=== Server Response Begin ===")   
                 for i in stdoutstring:                           #Output server response
@@ -860,18 +860,17 @@ class SSHClientMainWindow(QMainWindow):
                 logging.debug("=== Server Response End ===")  
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+                raise ServerErrors 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("SSH connection closed")
         self.ButtonToggle(True)
 
     @pyqtSlot(list)
     def PrintSSHValueResults(self, params):
         try:
-            if not self.IncludesErrors(params):    
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 stdoutstring, stderrstring = self.FormatLists(params[1], params[2])
                 stdoutstringsanitized = []
                 stderrstringsanitized = list(set(stderrstring))     #Remove duplicate errors 
@@ -928,18 +927,17 @@ class SSHClientMainWindow(QMainWindow):
                                 logging.info(LineIcon + PairList[0] + " - " + HiddenValue)
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+                raise ServerErrors
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("SSH connection closed")
         self.ButtonToggle(True)
 
     @pyqtSlot(list)
     def PrintDiskInfoResults(self, params):
         try:
-            if not self.IncludesErrors(params):    
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 logging.debug("=== Server Response Begin ===")   
                 stdinstring, stdoutstring, stderrstring, runtime = params[0], params[1], params[2], params[3]
                 Headers = stdoutstring[0].replace("on", "").split()                          #Headers
@@ -952,17 +950,18 @@ class SSHClientMainWindow(QMainWindow):
                         logging.debug(indent + Headers[j] + ": " + currentrow[j])
                 logging.debug("=== Server Response End ===")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+            else:
+                raise ServerErrors 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("SSH connection closed")
         self.ButtonToggle(True)
         
     @pyqtSlot(list)
     def PrintSSHFetchLogResults(self, params):
         try:
-            if not self.IncludesErrors(params):                 #If no errors were thrown 
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 Filename = "ServerLogs.log"
                 stdoutstring, stderrstring = self.FormatLists(params[1], params[2])
                 if stdoutstring:
@@ -991,18 +990,17 @@ class SSHClientMainWindow(QMainWindow):
                     logging.info("Logs were put into '" + os.path.basename(os.path.normpath(self.FetchClientStoragePath())) + "'")
                     logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+                raise ServerErrors 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("SSH connection closed")
         self.ButtonToggle(True)
         
     @pyqtSlot(list)
     def PrintSSHFetchFileResults(self, params):
         try:
-            if not self.IncludesErrors(params):                 #If no errors were thrown 
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 ServerSpace = params[0].pop()
                 logging.info("The following file(s) retrieved")
                 params[0].sort()
@@ -1015,18 +1013,17 @@ class SSHClientMainWindow(QMainWindow):
                 logging.info("Remaining available server storage: " + ServerSpace[3] + "b [" + ServerSpace[4] + " Used]")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+                raise ServerErrors 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("SSH connection closed")
         self.ButtonToggle(True)
                     
     @pyqtSlot(list)
     def PrintSSHSendFileResults(self, params):
         try:
-            if not self.IncludesErrors(params):                 #If no errors were thrown 
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 ServerSpace = params[0].pop()
                 logging.info("The following file(s) sent")
                 params[0].sort()
@@ -1039,18 +1036,17 @@ class SSHClientMainWindow(QMainWindow):
                 logging.info("Remaining available server storage: " + ServerSpace[3] + "b [" + ServerSpace[4] + " Used]")
                 logging.info("Request time: " + str(round(params[3], 2)) + " second(s)")
             else:
-                 logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+                raise ServerErrors 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("SSH connection closed")
         self.ButtonToggle(True)
 
     @pyqtSlot(list)
     def PrintPingResults(self, params):
         try:
-            if not self.IncludesErrors(params):                 #If no errors were thrown on ping attempt
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 PingList = [i.replace("\r", "") for i in str(params[0]).split('\n') if i != "\r"]
                 if(PingList.__contains__("Request timed out")):
                     logging.info("Request timed out: Server unreachable")
@@ -1058,30 +1054,28 @@ class SSHClientMainWindow(QMainWindow):
                     for i in PingList:
                         logging.info(i)
             else:
-                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+                raise ServerErrors 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         logging.info("Ping completed")
         self.ButtonToggle(True)
 
     @pyqtSlot(list)
     def PrintTerminalOpeningResults(self, params):
         try:
-            if not self.IncludesErrors(params):                 #If no errors were thrown on ssh connection of putty instance
+            ServerErrors = self.IncludesErrors(params)
+            if not ServerErrors:    
                 self.ClearLogs()
             else:
-                logging.error(str(type(params[0]).name) + ": " + str(params[0]))
-        except TypeError as E:
-            logging.error("TypeError when parsing server response") 
+                raise ServerErrors 
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
         self.ButtonToggle(True)
 
     def IncludesErrors(self, list):
         PossibleExceptions = [Exception,
                                TypeError,
+                               TimeoutError,
                                FileNotFoundError,
                                FileExistsError,
                                AttributeError,
@@ -1095,7 +1089,7 @@ class SSHClientMainWindow(QMainWindow):
                                None]
         for i in list:
             if type(i) in PossibleExceptions:
-                return True
+                return i
         return False
     
     def FormatLists(self, output, errors):

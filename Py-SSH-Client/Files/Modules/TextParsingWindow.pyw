@@ -19,6 +19,8 @@ class TextParsingWindow(QMainWindow):
         self.KeywordLabel.setFixedHeight(25)
         self.KeywordLabel.setFont(Constants.CustomFont)
         self.KeywordLineEdit = QTextBrowser(self)
+        self.KeywordLineEdit.setCursor(QCursor(Qt.CursorShape.IBeamCursor))
+        self.KeywordLineEdit.viewport().setCursor(QCursor(Qt.CursorShape.IBeamCursor))
         self.KeywordLineEdit.setReadOnly(False)
         self.KeywordLineEdit.setFixedHeight(100)
         self.KeywordLineEdit.setFont(Constants.CustomFont)
@@ -62,18 +64,14 @@ class TextParsingWindow(QMainWindow):
         try:
             UpdatedTotalStr = str(len([i.strip() for i in re.split("\n", raw) if len(i) != 0]))
             self.KeywordLabel.setText("Keywords (Current Total: " + UpdatedTotalStr + ")")
-        except TypeError as E:
-            logging.error(E) 
         except Exception as EX:
-            logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
 
     def UpdateKeywords(self, raw):
         try:
             [self.KeywordLineEdit.append(i) for i in raw.split("+")]
-        except TypeError as E:
-            logging.error(E) 
         except Exception as EX:
-            logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args))     
+            logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
     
     def SubmitKeywords(self, raw):
         try:
@@ -81,8 +79,6 @@ class TextParsingWindow(QMainWindow):
             self.MainWindow.KeywordInput.setText(UpdatedKeywordStr)
             self.MainWindow.KeywordInput.setCursorPosition(0)
             self.close()
-        except TypeError as E:
-            logging.error(E) 
         except Exception as EX:
-            logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args))     
+            logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
 

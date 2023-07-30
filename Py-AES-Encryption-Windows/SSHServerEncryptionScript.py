@@ -5,6 +5,11 @@
         -JSON implementation
             -3 times Nested JSON might break some functionality
                 -Needs additional testing
+        -The function to verify if a file is encrypted will sometimes throw false positives
+            -Can be related to the size of the data
+            -Related to the data content or encryption data content?
+            -May need to come up with another solution  
+                -Headers for encrypted files?
 
     Required Software
         -Python 

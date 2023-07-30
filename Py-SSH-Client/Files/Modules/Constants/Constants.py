@@ -6,7 +6,7 @@ CustomFont = QFont("Arial Black", 9)
 CustomFontSmall = QFont("Arial Black", 8)
 
 #Constants
-VERSIONNUMBER = "SSH Client v1.85b"
+VERSIONNUMBER = "SSH Client v1.85"
 ERRORTEMPLATE = "A {0} exception occurred. Arguments:\n{1!r}"
 LINKTEMPLATE = "<a style='color:#ffa02f;' href='{0}'>{1}</a>"
 PUTTYDOWNLOADLINK = "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html"

@@ -4,6 +4,5 @@
 <h1>Required Modules</h1>
 <ul>
     <li>PyQt5 - <a href="https://pypi.org/project/PyQt5/">Link</a></li>
-    <li>pyperclip - <a href="https://pypi.org/project/pyperclip/">Link</a></li>
     <li>paramiko - <a href="https://pypi.org/project/paramiko/">Link</a></li>
 </ul>

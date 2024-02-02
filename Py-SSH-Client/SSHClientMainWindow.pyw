@@ -6,6 +6,12 @@ Current Bugs
         -Related to a module?
         -Related to server firewall?
         -Server restart will fix
+    -Some of the 'Results' functions still give the full server info on an error. Need to streamline the process to just the error
+    -The placeholder text for the QLineEdits are the same color as the rest. Need a fix. CSS or custom widget?
+    -Investigate issues with 'Send All' 'Retrive All' functionality
+        -'Retrive All' grabs one file and fails saying file doesn't exist
+            -Possible name translation issue?
+        -'Send All' causing issues sometimes. Likely need to create the directories on the client machine
 
 Future Features
     -Give more detailed log information than just SSH logins when server log request is executed
@@ -21,6 +27,7 @@ Future Features
         -Might be a good idea to log specifics of each file fetched/sent
             -This will give the end user a better idea of their progress instead of long hang-ups without updates for long requests
     -Add in option to remotely modify file, or send new json/xml keywords to an existing file
+    -Create a shell script on the server to easily copy and back up contents
 
 Required Software
     -Python 
@@ -31,16 +38,13 @@ Required Software
             -Purpose: GUI Interface
             -Installation: https://pypi.org/project/PyQt5/
             -Documentation: https://www.riverbankcomputing.com/static/Docs/PyQt5/
-        -darkorange (Modified Theme)
-            -Purpose: GUI Theme
-            -Installation: https://github.com/sommerc/pyqt-stylesheets/blob/master/pyqtcss/src/darkorange/style.qss
-        -pyperclip
-            -Purpose: Clipboard Interactivity
-            -Installation: https://pypi.org/project/pyperclip/
         -paramiko 
             -Purpose: SSH Connections
             -Installation: https://pypi.org/project/paramiko/
             -Documentation - https://www.paramiko.org/
+        -darkorange (Modified Theme)
+            -Purpose: GUI Theme
+            -Original: https://github.com/sommerc/pyqt-stylesheets/blob/master/pyqtcss/src/darkorange/style.qss
     -Additional Software
         -Putty (Optional)
             -Windows SSH Terminal
@@ -79,7 +83,6 @@ import os
 import logging
 import json
 import shutil
-import pyperclip
 import time
 import re
 import webbrowser
@@ -114,12 +117,6 @@ class SSHClientMainWindow(QMainWindow):
     PathsWindow = None
     KeywordsWindow = None
     SSHObject = None
-    MENUSTYLESHEET = (
-        'QMenuBar { \
-            border-bottom: 1px solid; \
-            border-color: gray; \
-        }'
-    )
     REQUESTS = {
         "Request" : [
             "Values",
@@ -145,7 +142,6 @@ class SSHClientMainWindow(QMainWindow):
         #Menu Bar
         Menu = self.menuBar()
         Menu.setFont(Constants.CustomFont)
-        Menu.setStyleSheet(self.MENUSTYLESHEET)
         
         #File
         FileMenu = Menu.addMenu('File')
@@ -469,10 +465,10 @@ class SSHClientMainWindow(QMainWindow):
             logging.error("Error in JSON decoding") 
             logging.warning("Some settings may not have loaded properly")
         except KeyError as KE:
-            logging.error(Constants.ERRORTEMPLATE.format(type(KE).name, KE.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(KE).__name__, KE.args)) 
             logging.warning("Some settings may not have loaded properly")
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
             logging.warning("Some settings may not have loaded properly")
                     
     def SaveSettings(self):
@@ -497,17 +493,17 @@ class SSHClientMainWindow(QMainWindow):
                 File.write(json.dumps(Config))
             logging.info("Settings saved in '" + os.path.basename(os.path.normpath(Path)) + "'")
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
             logging.warning("Settings were not saved properly")
 
     def OpenDirectoryDialogLocal(self):
         try:
-            dir = QFileDialog.getExistingDirectory(None, 'Browse Local Directory', 'C:\\', QFileDialog.ShowDirsOnly)
-            if dir:
-                self.ClientStoragePathField.setText(dir + "/")
+            ChosenDir = QFileDialog.getExistingDirectory(None, 'Browse Local Directory', 'C:\\', QFileDialog.ShowDirsOnly)
+            if ChosenDir:
+                self.ClientStoragePathField.setText(ChosenDir + "/")
                 self.ClientStoragePathField.setCursorPosition(0)
         except Exception as E:
-            logging.error(Constants.ERRORTEMPLATE.format(type(E).name, E.args)) 
+            logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
                 
     def ValidateServerInput(self, Full):  
         if not self.ServerName.text():
@@ -564,7 +560,7 @@ class SSHClientMainWindow(QMainWindow):
                     logging.warning("Putty was not found")
                     logging.info("Download it " + Constants.LINKTEMPLATE.format(Constants.PUTTYDOWNLOADLINK, "Here"))
             except Exception as EX:
-                logging.error(Constants.ERRORTEMPLATE.format(type(EX).name, EX.args)) 
+                logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
         elif sys.platform == 'linux':   #SSHPass required
             try:
                 Value = subprocess.checkoutput("dpkg -s sshpass", shell=True).decode('utf-8')
@@ -576,7 +572,7 @@ class SSHClientMainWindow(QMainWindow):
                 logging.error("'sshpass' not installed")
                 logging.info("run 'sudo apt install sshpass'")
             except Exception as EX:
-                logging.error(ERRORTEMPLATE.format(type(EX).name, EX.args)) 
+                logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
 
     def TerminalButtonPressed(self):
         DIV = self.ValidateServerInput(Full=True)
@@ -692,7 +688,7 @@ class SSHClientMainWindow(QMainWindow):
                     logging.info(DIV)
                                     
     def ClearClose(self):
-        self.ClearClipboard()
+        self.CopyClipboard('')
         self.close()
 
     def AppendDateUpdate(self, Command):
@@ -833,9 +829,9 @@ class SSHClientMainWindow(QMainWindow):
                 and URLString[0] != '#':                      #Value is a link    
                     webbrowser.open(URLString)
             elif URLString[0] == '#':                         #Value is a string
-                pyperclip.copy(URLString[1:])     
-            else:                                              #Value is invalid/unknown
-                raise Exception("Invalid value passed to 'CopyOrOpenLink' method")  
+                self.CopyClipboard(URLString[1:])
+            else:                                             #Value is invalid/unknown
+                raise Exception("Invalid value(s) passed to 'CopyOrOpenLink' method")  
         except Exception as E:
             logging.error(Constants.ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
@@ -1111,9 +1107,6 @@ class SSHClientMainWindow(QMainWindow):
                     .replace("WARNING:root:", "")
                         .replace("\n", "")
         )
-
-    def ToggleFullscreen(self):
-        self.showNormal() if self.isMaximized() else self.showMaximized()
             
     def TogglePasswords(self):
         if self.ServerPassword.echoMode() == QLineEdit.Normal:
@@ -1161,12 +1154,12 @@ class SSHClientMainWindow(QMainWindow):
             try:
                 os.startfile(self.FetchClientStoragePath())
             except IOError as IO:
-                logging.error(Constants.ERRORTEMPLATE.format(type(IO).name, IO.args)) 
+                logging.error(Constants.ERRORTEMPLATE.format(type(IO).__name__, IO.args)) 
         elif sys.platform == 'linux':
             try:
                 subprocess.call(('xdg-open ' + self.FetchClientStoragePath()), shell=True)
             except IOError as IO:
-                logging.error(ERRORTEMPLATE.format(type(IO).name, IO.args)) 
+                logging.error(Constants.ERRORTEMPLATE.format(type(IO).__name__, IO.args)) 
 
     def FetchServerStoragePath(self):
         return self.ServerStoragePathField.text()
@@ -1199,8 +1192,8 @@ class SSHClientMainWindow(QMainWindow):
         self.LoggerLevelMenuOptionWarning.setChecked(False)
         self.LoggerLevelMenuOptionDebug.setChecked(False)
 
-    def ClearClipboard(self):
-        pyperclip.copy('')
+    def CopyClipboard(self, Text):
+        Clipboard.setText(Text)
                                             
 if __name__ == "__main__":
     StylesheetPath = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Stylesheets/Dark_Theme.css").replace("\\", "/")
@@ -1210,6 +1203,7 @@ if __name__ == "__main__":
         with open(StylesheetPath) as Stylesheet:
             app = QApplication(sys.argv)
             app.setStyleSheet(Stylesheet.read())
+            Clipboard = app.clipboard()
             Main = SSHClientMainWindow()
             Main.show()
             sys.exit(app.exec_())

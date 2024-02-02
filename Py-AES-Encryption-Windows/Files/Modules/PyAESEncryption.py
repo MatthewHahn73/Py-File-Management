@@ -4,6 +4,11 @@
     Bugs
         -N/A
 
+    TODO: Write some code to validate if an image is encrypted or not
+        -Options
+            -Fail the encryption/decryption if any of the files would fail the test
+            -Add in a header/footer in the image byte string 
+
     Required Software
         -Python 
             -Version >= 3.6
@@ -12,36 +17,30 @@
             -Cryptodomex 
                 -Purpose: 256-Bit AES
                 -Installation: https://pypi.org/project/pycryptodomex/
-            -PyPDF2
-                -Purpose: PDF Encryption
-                -Installation: https://pypi.org/project/PyPDF2/
             -BeautifulSoup
                 -Purpose: XML Processing
                 -Installation: https://pypi.org/project/beautifulsoup4/
-            -lxml 
-                -Purpose: XML parsing
-                -Installation: https://pypi.org/project/lxml/
 
     Methods
         -ProcessFile
             -Main Method
             -Decrypts a given file, checks for existance the local variable AESAttr 
-                -Returns value pair(s) of given JSON data if keyword is found
+                -Returns value pair(s) of given JSON/XML data if keyword is found
         -FetchTextList 
             -Gets the first children of a given JSON keyword
         -EncryptDirectory
-            -Encrypts a given directory with local variable AESKey
+            -Encrypts a given directory with local variable AES key
         -DecryptDirectory
-            -Decrypts a given directory with local variable AESKey
+            -Decrypts a given directory with local variable AES key
         -EncryptFile
             -Encrypts a given file with AES 256
-            -Supports .txt, .json, and .pdf extensions
+            -Supports: [.txt, .json, .xml, .jpg, .jpeg, .png, .pdf]
         -DecryptFile
             -Decrypts a given file with AES256
-            -Supports .txt, .json, and .pdf extensions
+            -Supports: [.txt, .json, .xml, .jpg, .jpeg, .png, .pdf]
         -DecryptText
             -Decrypts the given file contents and returns them
-            -Supports .json extensions
+            -Supports: [.json]
 """
 
 import sys
@@ -53,9 +52,7 @@ import time
 import json
 from collections import defaultdict
 from Cryptodome.Cipher import AES
-from PyPDF2 import PdfReader, PdfWriter
 from math import sqrt, ceil
-from lxml import etree
 from bs4 import BeautifulSoup 
 
 logger = logging.getLogger()
@@ -70,11 +67,11 @@ class FileEncryption():
     
     def ChangeKeyToBytes(self, NewKey):
         self.AESKey = bytes(NewKey, "utf-8")
-
+            
     def ChangeAttr(self, NewAttr):
         self.AESAttr = NewAttr 
 
-    def ChangeKeyToString(self):
+    def ReturnKeyAsStringFromBytes(self):
         return self.AESKey.decode('UTF-8')
 
     def OpenAppCrossplatform(self, Dir):
@@ -224,7 +221,7 @@ class FileEncryption():
                 except Exception as GeneralException:
                     logging.error(GeneralException)
 
-            elif(Path.lower().endswith(".txt") or Path.lower().endswith(".xml")):      #File to decrypt is a .txt or an .xml
+            elif(Path.lower().endswith((".txt", ".xml", ".csv"))):      #File to decrypt is a basic text file or mark up language
                 try:
                     logging.info("Reading in data ...")   if Verbose else None
                     with open(Path, "rb") as File:
@@ -248,17 +245,17 @@ class FileEncryption():
                 except Exception as GeneralException:
                     logging.error(GeneralException)
 
-            elif(Path.lower().endswith(".pdf")):  #File to encrypt is a .pdf
+            elif(Path.lower().endswith((".jpg", ".jpeg", ".png", ".pdf"))):        #File to decrypt is an image
                 try:
                     logging.info("Reading in data ...")  if Verbose else None
-                    PDFReader = PdfReader(Path)
-                    PDFWriter = PdfWriter()
-                    for P in PDFReader.pages:
-                        PDFWriter.add_page(P)
+                    with open(Path, "rb") as File:
+                        BytesImage = File.read()
                     logging.info("Encrypting file ...")  if Verbose else None
-                    PDFWriter.encrypt(self.ChangeKeyToString())
-                    with open(Path, "wb") as f:
-                        PDFWriter.write(f)  
+                    Key, RawData = self.AESKey[:len(self.AESKey)], BytesImage[:len(BytesImage)]
+                    Swap = int.from_bytes(RawData, sys.byteorder) ^ int.from_bytes(Key, sys.byteorder)     #XOR swap with AES key
+                    EncryptedImage = Swap.to_bytes(len(RawData), sys.byteorder)                    
+                    with open(Path, "wb") as File:
+                        File.write(EncryptedImage)
                 except IOError:
                     FileSplit = pathlib.PurePath(Path)
                     logging.error("IOError opening " + "'~\\" + str(FileSplit.parent.name) + "\\" + str(FileSplit.name) + "'")
@@ -266,8 +263,10 @@ class FileEncryption():
                     logging.error(UnicodeException)
                 except Exception as GeneralException:
                     logging.error(GeneralException)
+
             else:                                     #File to encrypt is not supported
                 logging.error("File extension was not supported: " + os.path.splitext(Path)[1])
+
         else: 
             logging.error("Cannot process empty files")
 
@@ -303,7 +302,7 @@ class FileEncryption():
                 except Exception as GeneralException:
                     logging.error(GeneralException)
 
-            elif(Path.lower().endswith(".txt") or Path.lower().endswith(".xml")):      #File to decrypt is a .txt or an .xml
+            elif(Path.lower().endswith((".txt", ".xml", ".csv"))):      #File to decrypt is a basic text file or mark up language
                 try:
                     logging.info("Reading in data ...") if Verbose else None
                     with open(Path, "rb") as File:
@@ -332,18 +331,17 @@ class FileEncryption():
                 except Exception as GeneralException:
                     logging.error(GeneralException)
                     
-            elif(Path.lower().endswith(".pdf")):        #File to decrypt is a .pdf
+            elif(Path.lower().endswith((".jpg", ".jpeg", ".png", ".pdf"))):        #File to decrypt is an image
                 try:
-                    logging.info("Reading in data ...")   if Verbose else None
-                    PDFReader = PdfReader(Path)
-                    PDFWriter = PdfWriter()
+                    logging.info("Reading in data ...")  if Verbose else None
+                    with open(Path, "rb") as File:
+                        BytesImage = File.read()
                     logging.info("Decrypting file ...")   if Verbose else None
-                    if PDFReader.is_encrypted:
-                        PDFReader.decrypt(self.ChangeKeyToString())
-                    for P in PDFReader.pages:
-                        PDFWriter.add_page(P)
-                    with open(Path, "wb") as f:
-                        PDFWriter.write(f)   
+                    Key, RawData = self.AESKey[:len(self.AESKey)], BytesImage[:len(BytesImage)]
+                    Swap = int.from_bytes(RawData, sys.byteorder) ^ int.from_bytes(Key, sys.byteorder)      #XOR swap with AES key
+                    DecryptedImage = Swap.to_bytes(len(RawData), sys.byteorder)                    
+                    with open(Path, "wb") as File:
+                        File.write(DecryptedImage)
                 except IOError:
                     FileSplit = pathlib.PurePath(Path)
                     logging.error("IOError opening " + "'~\\" + str(FileSplit.parent.name) + "\\" + str(FileSplit.name) + "'")

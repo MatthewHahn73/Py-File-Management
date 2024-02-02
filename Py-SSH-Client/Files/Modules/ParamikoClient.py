@@ -259,7 +259,7 @@ class ParamikoClient():
                     return [output, [], []]
                 except IOError as IO:
                     return [IO, None, None]
-            elif sys.platform == 'linux':       
+            elif sys.platform == 'linux':   #Only works on gnome?
                 try:
                     os.system("gnome-terminal -e 'bash -c \"sshpass -p '" + Pass + "' ssh " + User + "@" + Host + "; exec bash\"'")
                     return ["", "", ""]

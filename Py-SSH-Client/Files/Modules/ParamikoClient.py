@@ -91,9 +91,9 @@ class ParamikoClient():
         for E in FTPClient.listdir_attr(RemoteDir):
             Remote_Path = RemoteDir + "/" + E.filename
             mode = E.st_mode
-            if S_ISDIR(mode):
+            if S_ISDIR(mode):                                       #If current item is a directory
                 self.WalkThroughServerDirFetch(FTPClient, Remote_Path, Files, FileName)
-            elif S_ISREG(mode):
+            elif S_ISREG(mode):                                     #Current item must be a file
                 if FileName:
                     if os.path.basename(Remote_Path) in FileName:   #If were looking for a specific file
                         Files.append(Remote_Path)                   #Only add that filename
@@ -103,13 +103,17 @@ class ParamikoClient():
 
     def WalkThroughServerDirSend(self, Source, Target, FTPClient, Files):
         for I in os.listdir(Source):
-            if os.path.isfile(os.path.join(Source, I)):
-                FTPClient.put(os.path.join(Source, I), '%s/%s' % (Target, I))
+            if os.path.isfile(os.path.join(Source, I)):     #If current item is a file
+                TargetFile = ('%s%s' % (Target, I))
+                FTPClient.put(os.path.join(Source, I), TargetFile)
                 Files.append(I)
-            else:
-                if not FTPClient.stat('%s/%s' % (Target, I)):       #If directory doesn't exist, create it
-                    FTPClient.mkdir('%s/%s' % (Target, I))
-                self.WalkThroughServerDirSend(os.path.join(Source, I), '%s/%s' % (Target, I), FTPClient, Files)
+            else:                                           #Current item must be a directory
+                TargerDir = ('%s%s/' % (Target, I))
+                try:
+                    FTPClient.stat(TargerDir)       #Check for existing directory at the target
+                except FileNotFoundError:
+                    FTPClient.mkdir(TargerDir)      #If doesn't exist, create one
+                self.WalkThroughServerDirSend(os.path.join(Source, I), TargerDir, FTPClient, Files)
         return Files
 
     def ConnectAndFetchFile(self, Host, User, Pass, SSP, LSP, Filename=None):

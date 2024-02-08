@@ -24,7 +24,7 @@ QAbstractItemView {
 QMenuBar {
   border-bottom: 1px solid;
   border-color: gray;
-  color: #ffffff;
+  color: #d3d3d3;
   font-weight: 500;
 }
 
@@ -33,7 +33,7 @@ QMenuBar::item {
 }
 
 QMenuBar::item:selected {
-  color: #ffffff;
+  color: #d3d3d3;
 }
 
 QMenuBar::item:pressed {
@@ -44,11 +44,11 @@ QMenuBar::item:pressed {
 
 QMenu {
   border: 1px solid #000;
-  color: #ffffff;
+  color: #d3d3d3;
 }
 
 QMenu::item:selected {
-  color: #ffffff;
+  color: #d3d3d3;
 }
 
 QWidget:disabled {
@@ -72,18 +72,20 @@ QLabel {
 
 QLineEdit {
   background-color: #242424;
-  color: #ffffff;
+  color: #d3d3d3;
   border: 1px solid #242424;
   padding-left: 2px;
   outline: none;
 }
 
-QLineEdit[text=\"\"] {
-  background-color: yellow;
+QTextEdit {
+  background-color: #242424;
+  border: 1px solid #242424;
+  padding-left: 3px;
 }
 
 QPushButton {
-  color: #ffffff;
+  color: #d3d3d3;
   background-color: #242424;
   border-width: 1px;
   border-color: #242424;
@@ -105,7 +107,7 @@ QPushButton:pressed {
 
 QComboBox {
   background-color: #242424;
-  color: #ffffff;
+  color: #d3d3d3;
   border: 1px solid #242424;
   outline: none;
 }
@@ -149,23 +151,22 @@ QScrollArea {
 }
 
 QScrollBar:horizontal {
+  width: 11px;
   border: 1px solid #222222;
-  height: 7px;
-  margin: 0px 16px 0 16px;
 }
 
 QScrollBar::handle:horizontal {
   min-height: 20px;
+  background-color: gray;
+  border: 1px solid #222222;
 }
 
 QScrollBar::add-line:horizontal {
-  border: 1px solid #1b1b19;
-  width: 14px;
+  height: 0px;
 }
 
 QScrollBar::sub-line:horizontal {
-  border: 1px solid #1b1b19;
-  width: 14px;
+  height: 0px;
 }
 
 QScrollBar::add-page:horizontal,
@@ -174,34 +175,27 @@ QScrollBar::sub-page:horizontal {
 }
 
 QScrollBar:vertical {
-  width: 10px;
-  margin: 16px 0 16px 0;
+  width: 11px;
   border: 1px solid #222222;
 }
 
 QScrollBar::handle:vertical {
   min-height: 20px;
+  background-color: gray;
+  border: 1px solid #222222;
 }
 
 QScrollBar::add-line:vertical {
-  border: 1px solid #1b1b19;
-  height: 14px;
+  height: 0px;
 }
 
 QScrollBar::sub-line:vertical {
-  border: 1px solid #1b1b19;
-  height: 14px;
+  height: 0px;
 }
 
 QScrollBar::add-page:vertical,
 QScrollBar::sub-page:vertical {
   background: none;
-}
-
-QTextEdit {
-  background-color: #242424;
-  border: 1px solid #242424;
-  padding-left: 3px;
 }
 
 QPlainTextEdit {
@@ -249,7 +243,7 @@ QMainWindow::separator:hover {
 }
 
 QToolBar::handle {
-  background: url(Files/Assets/Icons/handle.png);
+  image: url(Files/Assets/Icons/handle.png);
 }
 
 QMenu::separator {

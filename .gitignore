@@ -1,3 +1,5 @@
 *.json
 *.lnk
 *.txt
+*.sh
+Py-SSH-Client/Files/Storage/

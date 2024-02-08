@@ -563,14 +563,13 @@ class SSHClientMainWindow(QMainWindow):
                 logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
         elif sys.platform == 'linux':   #SSHPass required
             try:
-                Value = subprocess.checkoutput("dpkg -s sshpass", shell=True).decode('utf-8')
+                Value = subprocess.check_output("dpkg -s sshpass", shell=True).decode('utf-8')
                 if 'install ok' in Value:
                     return "Success"
                 else:
                     raise Exception(Value)
             except subprocess.CalledProcessError as EX:
                 logging.error("'sshpass' not installed")
-                logging.info("run 'sudo apt install sshpass'")
             except Exception as EX:
                 logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
 

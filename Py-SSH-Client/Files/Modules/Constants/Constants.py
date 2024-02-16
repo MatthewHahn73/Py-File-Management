@@ -2,11 +2,11 @@ from PyQt5.QtGui import QFont
 import re
 
 #Fonts
-CustomFont = QFont("Arial Black", 9)
-CustomFontSmall = QFont("Arial Black", 8)
+CustomFont = QFont("Noto Sans Regular", 9)
+CustomFontSmall = QFont("Noto Sans Regular", 8)
 
 #Constants
-VERSIONNUMBER = "SSH Client v1.86b"
+VERSIONNUMBER = "SSH Client v1.87b"
 ERRORTEMPLATE = "A {0} exception occurred. Arguments:\n{1!r}"
 LINKTEMPLATE = "<a style='color:#ffa02f;' href='{0}'>{1}</a>"
 PUTTYDOWNLOADLINK = "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html"

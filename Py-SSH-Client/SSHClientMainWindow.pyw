@@ -7,11 +7,10 @@ Current Bugs
         -Related to server firewall?
         -Server restart will fix
     -Some of the 'Results' functions still give the full server info on an error. Need to streamline the process to just the error
+        -Need to come up with a general solution since this is located in the ConnectToServerGenericResults method
     -The placeholder text for the QLineEdits are the same color as the rest. Need a fix. CSS or custom widget?
-    -Investigate issues with 'Send All' 'Retrive All' functionality
-        -'Retrive All' grabs one file and fails saying file doesn't exist
-            -Possible name translation issue?
-        -'Send All' causing issues sometimes. Likely need to create the directories on the client machine
+        -Could alternatively just redesign the GUI for text fields to include labels
+    -'RuntimeError: wrapped C/C++ object of type QLogHandler has been deleted' thrown when closing the application in Fedora (Doesn't seem to do it on Debian distros)
 
 Future Features
     -Give more detailed log information than just SSH logins when server log request is executed
@@ -28,10 +27,12 @@ Future Features
             -This will give the end user a better idea of their progress instead of long hang-ups without updates for long requests
     -Add in option to remotely modify file, or send new json/xml keywords to an existing file
     -Create a shell script on the server to easily copy and back up contents
+    -Current validation for optional software for manual linux SSH sessions is broken and was removed
+        -Need to come up with a non-Debian (dkpg) solution for determining if packages exist on linux systems
 
 Required Software
     -Python 
-        -Version >= 3.6
+        -Version >= 3.7
         -Installation: https://www.python.org/downloads/
     -Python Modules
         -PYQT5
@@ -42,18 +43,27 @@ Required Software
             -Purpose: SSH Connections
             -Installation: https://pypi.org/project/paramiko/
             -Documentation - https://www.paramiko.org/
-        -darkorange (Modified Theme)
+        -darkorange (Modified Theme [Included])
             -Purpose: GUI Theme
             -Original: https://github.com/sommerc/pyqt-stylesheets/blob/master/pyqtcss/src/darkorange/style.qss
-    -Additional Software
-        -Putty (Optional)
-            -Windows SSH Terminal
-            -Purpose: Manual SSH Sessions
-            -Installation: https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html
-        -sshpass (Optional)
-            -Linux SSH Terminal
-            -Purpose: Manual SSH Sessions
-            -Installation: 'sudo apt install sshpass'
+    -Optional Software
+        -Windows
+            -Putty (Optional)
+                -Windows SSH Terminal
+                -Purpose: Manual SSH Sessions
+                -Installation: https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html
+        -Linux
+            -sshpass (Optional)
+                -Noninteractive SSH Password Provider 
+                -Purpose: Manual SSH Sessions
+                -Installation
+                    -Debian: 'sudo apt install sshpass'
+                    -Fedora: 'sudo dnf install sshpass'
+            -gnome-terminal (Optional)
+                -Linux terminal for gnome based Desktop environments 
+                -Purpose: Manual SSH Sessions
+                -Installation 
+                    -Debian: 'sudo apt-get -f install gnome-terminal'
         
 Functionality
     -Request
@@ -100,7 +110,7 @@ from paramiko.ssh_exception import \
     , AuthenticationException \
     , SSHException
 from Files.Modules import \
-    QTextEditLoggerCustom as QTEL \
+    QLogHandler as QTEL \
     , QTextBrowserCustom as QCTB \
     , QThreadWorker as QTW \
     , ParamikoClient as Client \
@@ -108,8 +118,8 @@ from Files.Modules import \
 from Files.Modules.Constants import Constants
 
 #Logger information
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+GlobalLogger = logging.getLogger()
+GlobalLogger.setLevel(logging.DEBUG)
 logging.getLogger("paramiko").setLevel(logging.DEBUG)
 
 #Main window
@@ -362,9 +372,9 @@ class SSHClientMainWindow(QMainWindow):
         self.LogEdit.setFont(Constants.CustomFontSmall)
         self.LogEdit.setReadOnly(True)
         self.LogEdit.anchorClicked.connect(self.CopyOrOpenLink)
-        Handler = QTEL.QTextEditLoggerCustom()
-        Handler.sigLog.connect(self.LogEdit.append)
-        logger.addHandler(Handler)   
+        self.Handler = QTEL.QLogHandler()
+        self.Handler.appendPlainText.connect(self.LogEdit.append)
+        GlobalLogger.addHandler(self.Handler)   
         self.LogLayout.addWidget(self.LogEdit)
         
         #Set Main Layout(s)
@@ -383,7 +393,7 @@ class SSHClientMainWindow(QMainWindow):
             
         #Window Settings
         self.setWindowTitle(Constants.VERSIONNUMBER)
-        self.setFixedSize(526, 533)
+        self.setMinimumSize(526, 533)
         widget = QWidget()
         widget.setLayout(self.MainLayout)
         self.setCentralWidget(widget)
@@ -392,7 +402,7 @@ class SSHClientMainWindow(QMainWindow):
         self.setFocus()
         self.ClientStoragePathField.setCursorPosition(0)
         self.ServerStoragePathField.setCursorPosition(0)
-
+        
     def LoadSettings(self):
         try:
             Path = (os.path.dirname(os.path.realpath(__file__))).replace("\\", "/") + "/Files/"
@@ -563,11 +573,7 @@ class SSHClientMainWindow(QMainWindow):
                 logging.error(Constants.ERRORTEMPLATE.format(type(EX).__name__, EX.args)) 
         elif sys.platform == 'linux':   #SSHPass required
             try:
-                Value = subprocess.check_output("dpkg -s sshpass", shell=True).decode('utf-8')
-                if 'install ok' in Value:
-                    return "Success"
-                else:
-                    raise Exception(Value)
+                return "Success"        #TODO: Write some code to validate both debian and non-debian based linux systems for gnome-terminal and sshpass
             except subprocess.CalledProcessError as EX:
                 logging.error("'sshpass' not installed")
             except Exception as EX:
@@ -751,7 +757,7 @@ class SSHClientMainWindow(QMainWindow):
         self.ButtonToggle(False)
         self.ClearLogs()
         logging.info("Attempting SSH to " + self.ServerName.text())
-        Command = self.AppendDateUpdate("cat /var/log/auth.log | grep 'Failed\|Accepted'")
+        Command = self.AppendDateUpdate("cat /var/log/auth.log | grep -E 'Failed|Accepted'")
         self.PThread = QThread(self)
         self.PWorker = QTW.QThreadWorker(self.SSHObject, self.ServerName.text(), self.ServerInput.text(), self.ServerPassword.text(), C=Command)
         self.PWorker.moveToThread(self.PThread)
@@ -1193,7 +1199,7 @@ class SSHClientMainWindow(QMainWindow):
 
     def CopyClipboard(self, Text):
         Clipboard.setText(Text)
-                                            
+
 if __name__ == "__main__":
     StylesheetPath = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Stylesheets/Dark_Theme.css").replace("\\", "/")
     if not os.path.exists(StylesheetPath): 

@@ -1,10 +1,10 @@
 import logging
 from PyQt5.QtCore import *
 
-class QTextEditLoggerCustom(logging.Handler, QObject):
-    sigLog = pyqtSignal(str)
+class QLogHandler(logging.Handler, QObject):
+    appendPlainText = pyqtSignal(str)
     def __init__(self):
-        logging.Handler.__init__(self)
+        super().__init__()
         QObject.__init__(self)
 
     def emit(self, logRecord):
@@ -13,8 +13,8 @@ class QTextEditLoggerCustom(logging.Handler, QObject):
         if Type in ["INFO", "WARNING", "ERROR"]:
             if Msg != '':
                 MsgFinal = "<span>" + Type + ' - ' + Msg + "</span>"    
-                self.sigLog.emit(MsgFinal)
+                self.appendPlainText.emit(MsgFinal)
         else:
             if Msg != '':
                 MsgFinal = "<span>" + Msg + "</span>"
-                self.sigLog.emit(MsgFinal)
+                self.appendPlainText.emit(MsgFinal)

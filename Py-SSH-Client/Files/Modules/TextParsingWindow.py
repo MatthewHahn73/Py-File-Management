@@ -40,7 +40,7 @@ class TextParsingWindow(QMainWindow):
         self.MainLayout.addLayout(self.KeywordLayoutV, 1, 1)
 
         #Icon Settings
-        IconPath = (os.path.join( os.path.dirname( __file__ ), '..' ) + "/Assets/Icons/PadlockIcon2.ico").replace("\\", "/")
+        IconPath = (os.path.join( os.path.dirname( __file__ ), '..' ) + "/Assets/Icons/Padlock_Icon.ico").replace("\\", "/")
         if not os.path.exists(IconPath): 
             logging.warning("Icon file couldn't be located")
         self.setWindowIcon(QIcon(IconPath))

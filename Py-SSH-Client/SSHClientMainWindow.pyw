@@ -386,7 +386,7 @@ class SSHClientMainWindow(QMainWindow):
         self.MainLayout.addLayout(self.LogLayout, 1, 1, 4, 1, alignment=Qt.AlignCenter)
 
         #Icon Settings
-        IconPath = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Icons/PadlockIcon2.ico").replace("\\", "/")
+        IconPath = (os.path.dirname(os.path.realpath(__file__)) + "/Files/Assets/Icons/Padlock_Icon.ico").replace("\\", "/")
         if not os.path.exists(IconPath): 
             logging.warning("Icon file couldn't be located")
         self.setWindowIcon(QIcon(IconPath))

@@ -263,7 +263,7 @@ class ParamikoClient():
                     return [output, [], []]
                 except IOError as IO:
                     return [IO, None, None]
-            elif sys.platform == 'linux':   #For both Debian and Arch/Fedora systems
+            elif sys.platform == 'linux':   #For both Debian, Arch, and Fedora systems
                 try:
                     command = ("gnome-terminal --command 'sshpass -p ""{0}"" ssh {1}@{2}'").format(Pass, User, Host)
                     os.system(command)

@@ -3,23 +3,13 @@
   <keyword1 value="0">
     <key1 value="1">KeyValue</key2>
     <key2 value="1">KeyValue</key2>
-    <key3 value="1">KeyValue</key2>
-    <key4 value="1">KeyValue</key2>
-    <key5 value="1">KeyValue</key2>
-    <key6 value="1">KeyValue</key2>
   </keyword1>
   <keyword2 value="0">
     <key1 value="1">KeyValue</key1>
     <key2 value="1">KeyValue</key2>
-    <key3 value="1">KeyValue</key3>
-    <key4 value="1">KeyValue</key4>
   </keyword2>
   <keyword3 value="0">
     <key1 value="1">KeyValue</key1>
     <key2 value="1">KeyValue</key2>
-    <key3 value="1">KeyValue</key3>
-    <key4 value="1">KeyValue</key4>
-    <key5 value="1">KeyValue</key5>
-    <key6 value="1">KeyValue</key6>
   </keyword3>
 </nodes>

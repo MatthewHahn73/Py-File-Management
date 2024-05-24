@@ -2,33 +2,19 @@
 SSH Client GUI 
 
 Current Bugs
-    -Rarely connections to server will timeout even if server is up
-        -Related to a module?
-        -Related to server firewall?
-        -Server restart will fix
     -Some of the 'Results' functions still give the full server info on an error. Need to streamline the process to just the error
         -Need to come up with a general solution since this is located in the ConnectToServerGenericResults method
-    -The placeholder text for the QLineEdits are the same color as the rest. Need a fix. CSS or custom widget?
-        -Could alternatively just redesign the GUI for text fields to include labels
     -'RuntimeError: wrapped C/C++ object of type QLogHandler has been deleted' thrown when closing the application in Fedora (Doesn't seem to do it on Debian distros)
 
 Future Features
+    -Add in a regex-like parser for the passwords and 'field' fields
+        -This will allow the client fetch all matching files for 'Single File' requests
+        -This will allow for the client to fetch all matching fields for 'Value' requests
     -Give more detailed log information than just SSH logins when server log request is executed
     -Add in an option to allow for use of SSH certificates 
         -This will require some serious valiation checking on the client side to ensure the existing of the certs
         -Also require some validation on the server side to validate existance of certs on the server
         -Add in an option to create a cert pairing on the local machine
-    -Improve/Fix the SSH time log issue
-        -Client will now automatically update server time for requests that require command line argument(s)
-        -Doesn't update for SSH requests made outside the GUI client (Like mobile SSH)
-        -Doesn't work for file transfers, pings, or putty calls
-    -Improve step by step logging information
-        -Might be a good idea to log specifics of each file fetched/sent
-            -This will give the end user a better idea of their progress instead of long hang-ups without updates for long requests
-    -Add in option to remotely modify file, or send new json/xml keywords to an existing file
-    -Create a shell script on the server to easily copy and back up contents
-    -Current validation for optional software for manual linux SSH sessions is broken and was removed
-        -Need to come up with a non-Debian (dkpg) solution for determining if packages exist on linux systems
 
 Required Software
     -Python 

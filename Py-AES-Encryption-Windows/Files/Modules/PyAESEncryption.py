@@ -4,11 +4,6 @@
     Bugs
         -N/A
 
-    TODO: Write some code to validate if an image is encrypted or not
-        -Options
-            -Fail the encryption/decryption if any of the files would fail the test
-            -Add in a header/footer in the image byte string 
-
     Required Software
         -Python 
             -Version >= 3.6

@@ -1,5 +1,5 @@
-*.json
 *.lnk
 *.txt
+Settings.json
 SSHClientMainWindow-AutoRun.sh
 Py-SSH-Client/Files/Storage/

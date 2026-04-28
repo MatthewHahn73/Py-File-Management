@@ -96,8 +96,6 @@ from Assets.Modules import \
 #Constants
 VERSIONNUMBER = "QTSFTP Client v0.25"
 ERRORTEMPLATE = "A(n) {0} exception occurred. Arguments:\n{1!r}"
-VALIDSERVEREXCEPTIONS = [Exception, TypeError, TimeoutError, FileNotFoundError, FileExistsError, AttributeError, subprocess.CalledProcessError,
-                               NoValidConnectionsError, PasswordRequiredException, AuthenticationException, SSHException, SocketError, SocketTimeout, None]
 
 #Main window
 class SSHClientMainWindow(QMainWindow):
@@ -124,7 +122,7 @@ class SSHClientMainWindow(QMainWindow):
         #Set menu item triggers
         self.actionClose.triggered.connect(lambda: self.close())
         self.actionDisconnect.triggered.connect(self.ExecuteDisconnectButton)
-        self.actionCancel_Current_Operation.triggered.connect(self.CancelCurrentOperation)
+        self.actionCancel_Current_Operation.triggered.connect(self.ExecuteCancelOperationButton)
         self.actionShow_Password.triggered.connect(self.TogglePasswords)
         self.actionError.triggered.connect(lambda: self.ToggleLoggingLevel("Error"))
         self.actionWarning.triggered.connect(lambda: self.ToggleLoggingLevel("Warning"))
@@ -225,6 +223,9 @@ class SSHClientMainWindow(QMainWindow):
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
 
+    def ExecuteCancelOperationButton(self):   
+        pass
+
     def ExecuteShowCurrentHiddenFilesButton(self, Checked):
         CurrentDir = QDir.currentPath()
         ChangedIconPath = f"{CurrentDir}/Assets/Icons/view-visible.svg" if Checked else f"{CurrentDir}/Assets/Icons/view-hidden.svg"
@@ -245,10 +246,6 @@ class SSHClientMainWindow(QMainWindow):
     def ExecuteConnectedNavigateOneUpButton(self):
         OneDirectoryUp = os.path.dirname(self.ConnectedDirEdit.text())
         self.LoadGivenRemoteDirectory(OneDirectoryUp, self.ConnectedHiddenToggleCheckbox.isChecked()) 
-
-    #TODO
-    def CancelCurrentOperation(self):   
-        pass
 
     def CurrentItemSelected(self, index):
         if index.isValid():

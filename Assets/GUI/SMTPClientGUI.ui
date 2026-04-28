@@ -1,0 +1,462 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>817</width>
+    <height>628</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="MainWidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <layout class="QVBoxLayout" name="VerticalStructureLayout" stretch="0,1,0">
+      <property name="sizeConstraint">
+       <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+      </property>
+      <property name="leftMargin">
+       <number>10</number>
+      </property>
+      <property name="topMargin">
+       <number>10</number>
+      </property>
+      <property name="rightMargin">
+       <number>10</number>
+      </property>
+      <property name="bottomMargin">
+       <number>10</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="ConnectionCredentialsLayout" stretch="1,1,1,1,0">
+        <property name="spacing">
+         <number>10</number>
+        </property>
+        <property name="leftMargin">
+         <number>10</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>10</number>
+        </property>
+        <item>
+         <layout class="QHBoxLayout" name="A_HostLayout" stretch="0,0">
+          <property name="sizeConstraint">
+           <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+          </property>
+          <item>
+           <widget class="QLabel" name="A_HostLabel">
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Host</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="B_HostEdit">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="B_PortLayout">
+          <item>
+           <widget class="QLabel" name="A_PortLabel">
+            <property name="text">
+             <string>Port</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="B_PortEdit">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="D_UsernameLayout">
+          <property name="sizeConstraint">
+           <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+          </property>
+          <item>
+           <widget class="QLabel" name="A_UsernameLabel">
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Username</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="B_UsernameEdit">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="C_PasswordLayout" stretch="0,0">
+          <property name="sizeConstraint">
+           <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+          </property>
+          <item>
+           <widget class="QLabel" name="A_PasswordLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Password</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="B_PasswordEdit">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="echoMode">
+             <enum>QLineEdit::EchoMode::Password</enum>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="E_ConnectionButton">
+          <property name="text">
+           <string>Connect</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QGridLayout" name="FileStructureGrid">
+        <item row="1" column="0">
+         <widget class="QTreeView" name="CurrentMachineDirectoryTree">
+          <property name="editTriggers">
+           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
+          </property>
+          <property name="sortingEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <layout class="QHBoxLayout" name="CurrentDirHeaderLayout">
+          <item>
+           <widget class="QLineEdit" name="CurrentDirEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="CurrentDirUpOne">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/go-up.svg</normaloff>../Icons/go-up.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="CurrentHiddenToggleCheckbox">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/view-hidden.svg</normaloff>../Icons/view-hidden.svg</iconset>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="1" column="1">
+         <widget class="QTreeView" name="ConnectedMachineDirectoryTree">
+          <property name="editTriggers">
+           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
+          </property>
+          <property name="sortingEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <layout class="QHBoxLayout" name="ConnectedDirHeaderLayout">
+          <item>
+           <widget class="QLineEdit" name="ConnectedDirEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ConnectedDirUpOne">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/go-up.svg</normaloff>../Icons/go-up.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ConnectedHiddenToggleCheckbox">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/view-hidden.svg</normaloff>../Icons/view-hidden.svg</iconset>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QTextBrowser" name="LogOutput">
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>200</height>
+         </size>
+        </property>
+        <property name="openExternalLinks">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="SMTPStatusBar"/>
+  <widget class="QMenuBar" name="SMTPMenuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>817</width>
+     <height>30</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionClose"/>
+   </widget>
+   <widget class="QMenu" name="menuOptions">
+    <property name="title">
+     <string>Options</string>
+    </property>
+    <widget class="QMenu" name="menuLogging_Level">
+     <property name="title">
+      <string>Logging Level</string>
+     </property>
+     <addaction name="actionError"/>
+     <addaction name="actionWarning"/>
+     <addaction name="actionInfo"/>
+     <addaction name="actionDebugging"/>
+    </widget>
+    <addaction name="menuLogging_Level"/>
+    <addaction name="actionShow_Password"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionUpdates"/>
+    <addaction name="actionAbout"/>
+   </widget>
+   <widget class="QMenu" name="menuServer">
+    <property name="title">
+     <string>Server</string>
+    </property>
+    <addaction name="actionDisconnect"/>
+    <addaction name="separator"/>
+    <addaction name="actionCancel_Current_Operation"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuOptions"/>
+   <addaction name="menuServer"/>
+   <addaction name="menuHelp"/>
+  </widget>
+  <action name="actionClose">
+   <property name="text">
+    <string>Close</string>
+   </property>
+  </action>
+  <action name="actionUpdates">
+   <property name="text">
+    <string>Update</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>About</string>
+   </property>
+  </action>
+  <action name="actionError">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Error</string>
+   </property>
+  </action>
+  <action name="actionWarning">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Warning</string>
+   </property>
+  </action>
+  <action name="actionInfo">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Info</string>
+   </property>
+  </action>
+  <action name="actionDebugging">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Debugging</string>
+   </property>
+  </action>
+  <action name="actionShow_Password">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Show Password</string>
+   </property>
+  </action>
+  <action name="actionDisconnect">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Disconnect</string>
+   </property>
+  </action>
+  <action name="actionCancel_Current_Operation">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Cancel Current Operation</string>
+   </property>
+  </action>
+  <action name="actionReconnect">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Reconnect</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

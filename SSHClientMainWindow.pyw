@@ -91,7 +91,8 @@ from paramiko.ssh_exception import \
     , SSHException
 from Assets.Modules import \
     QLogHandler as LogHanderObject \
-    , QThreadWorker as ThreadWorkerObject 
+    , QThreadWorker as ThreadWorkerObject \
+    , QStandardItemModelCustom as StandardItemModelCustomObject
 
 #Constants
 VERSIONNUMBER = "QTSFTP Client v0.25"
@@ -139,10 +140,17 @@ class SSHClientMainWindow(QMainWindow):
         #Set the TextEdit triggers
         self.CurrentDirEdit.editingFinished.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()))
         self.ConnectedDirEdit.editingFinished.connect(lambda: self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()))
-        
+                
         #Set the directory tree triggers
-        self.CurrentMachineDirectoryTree.doubleClicked.connect(self.CurrentItemSelected)
-        self.ConnectedMachineDirectoryTree.doubleClicked.connect(self.ConnectedItemSelected)
+        self.CurrentMachineDirectoryTree.doubleClicked.connect(self.CurrentItemDoubleClicked)
+        self.ConnectedMachineDirectoryTree.doubleClicked.connect(self.ConnectedItemDoubleClicked)
+
+        #Instantiate the custom QStandardItemModels for the trees
+        self.CurrentDirectoryModel = StandardItemModelCustomObject.CustomTreeModel()
+        self.CurrentDirectoryModel.valueAdded.connect(self.CurrentDirectoryModelChanged)
+
+        self.ConnectedDirectoryModel = StandardItemModelCustomObject.CustomTreeModel()
+        self.ConnectedDirectoryModel.valueAdded.connect(self.ConnectedDirectoryModelChanged)
         
         #Set status label
         self.UpdateStatusLabel("Disconnected", "white")
@@ -155,8 +163,8 @@ class SSHClientMainWindow(QMainWindow):
         try:
             if os.path.exists(Path):
                 if not os.path.isfile(Path):
-                    self.DirectoryModel = QStandardItemModel()
-                    self.DirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
+                    self.CurrentDirectoryModel.clear()
+                    self.CurrentDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
                     for DirectoryItem in os.listdir(Path):
                         DirectoryItemPath = f"{Path}/{DirectoryItem}" 
                         IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
@@ -169,8 +177,8 @@ class SSHClientMainWindow(QMainWindow):
                                 ItemName = os.path.basename(DirectoryItemPath)
                                 ItemModified = str(datetime.datetime.fromtimestamp(os.stat(DirectoryItemPath).st_mtime).strftime('%Y-%m-%d %I:%M %p'))
                                 DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
-                                self.DirectoryModel.appendRow(DirectoryItemRow)
-                    self.CurrentMachineDirectoryTree.setModel(self.DirectoryModel)
+                                self.CurrentDirectoryModel.appendRow(DirectoryItemRow)
+                    self.CurrentMachineDirectoryTree.setModel(self.CurrentDirectoryModel)
                     self.CurrentMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
                     self.CurrentDirEdit.setText(Path)
                     self.CurrentDirUpOne.setEnabled(self.CurrentDirEdit.text() != '/')
@@ -247,7 +255,7 @@ class SSHClientMainWindow(QMainWindow):
         OneDirectoryUp = os.path.dirname(self.ConnectedDirEdit.text())
         self.LoadGivenRemoteDirectory(OneDirectoryUp, self.ConnectedHiddenToggleCheckbox.isChecked()) 
 
-    def CurrentItemSelected(self, index):
+    def CurrentItemDoubleClicked(self, index):
         if index.isValid():
             PathIndex = index.sibling(index.row(), 0)
             ItemName = PathIndex.data()
@@ -255,12 +263,18 @@ class SSHClientMainWindow(QMainWindow):
             if os.path.exists(FullPath):
                 self.LoadGivenLocalDirectory(FullPath, self.CurrentHiddenToggleCheckbox.isChecked())
         
-    def ConnectedItemSelected(self, index):
+    def ConnectedItemDoubleClicked(self, index):
         if index.isValid():
             PathIndex = index.sibling(index.row(), 0)
             ItemName = PathIndex.data()
             FullPath = os.path.join(self.ConnectedDirEdit.text(), ItemName)
             self.LoadGivenRemoteDirectory(FullPath, self.ConnectedHiddenToggleCheckbox.isChecked())
+
+    def CurrentDirectoryModelChanged(self, item):
+        print("Current Directory", item, sep=" - ")
+
+    def ConnectedDirectoryModelChanged(self, item):
+        print("Connected Directory", item, sep=" - ")
 
     def ToggleLoggingLevel(self, Level):
         self.actionError.setChecked(False)
@@ -359,8 +373,8 @@ class SSHClientMainWindow(QMainWindow):
         try:
             if not self.IncludesErrors(params):   
                 self.SSHObject, self.SFTPObject, ServerPath, ShowHidden, DirectoryItemsList = params["SSH Object"], params["SFTP Object"], params["Server Path"], params["Hidden Toggle"], params["Directory Items"]
-                DirectoryModel = QStandardItemModel()
-                DirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
+                self.ConnectedDirectoryModel.clear() 
+                self.ConnectedDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
                 for DirectoryItem in DirectoryItemsList:
                     DirectoryItemPath = os.path.join(ServerPath, DirectoryItem["Name"])
                     IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
@@ -368,8 +382,8 @@ class SSHClientMainWindow(QMainWindow):
                         ItemName, ItemType, ItemModified = DirectoryItem["Name"], DirectoryItem["Type"], DirectoryItem["Date Modified"]
                         if ItemName != None:
                             DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
-                            DirectoryModel.appendRow(DirectoryItemRow)
-                self.ConnectedMachineDirectoryTree.setModel(DirectoryModel)
+                            self.ConnectedDirectoryModel.appendRow(DirectoryItemRow)
+                self.ConnectedMachineDirectoryTree.setModel(self.ConnectedDirectoryModel)
                 self.ConnectedMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
                 self.ConnectedDirEdit.setText(ServerPath)
                 self.ConnectedDirUpOne.setEnabled(self.ConnectedDirEdit.text() != '/')

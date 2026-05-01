@@ -75,7 +75,7 @@ Loaded GUI Resources (And structure)
     -SMTPStatusBar (QStatusBar)
 """
 
-import os, logging, sys, subprocess, paramiko, datetime, platform, ctypes
+import os, logging, sys, subprocess, paramiko, datetime, platform, ctypes, json
 from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
@@ -146,10 +146,10 @@ class SSHClientMainWindow(QMainWindow):
         self.ConnectedMachineDirectoryTree.doubleClicked.connect(self.ConnectedItemDoubleClicked)
 
         #Instantiate the custom QStandardItemModels for the trees
-        self.CurrentDirectoryModel = StandardItemModelCustomObject.CustomTreeModel()
+        self.CurrentDirectoryModel = StandardItemModelCustomObject.CustomTreeModel("CurrentDirectoryModel")
         self.CurrentDirectoryModel.valueAdded.connect(self.CurrentDirectoryModelChanged)
 
-        self.ConnectedDirectoryModel = StandardItemModelCustomObject.CustomTreeModel()
+        self.ConnectedDirectoryModel = StandardItemModelCustomObject.CustomTreeModel("ConnectedDirectoryModel")
         self.ConnectedDirectoryModel.valueAdded.connect(self.ConnectedDirectoryModelChanged)
         
         #Set status label
@@ -194,12 +194,33 @@ class SSHClientMainWindow(QMainWindow):
         self.PWorker = ThreadWorkerObject.QThreadWorker (
                 SSHObj = self.SSHObject
                 , SFTPObj = self.SFTPObject
-                , GenStr = Path  
-                , GenTog = ShowHidden
+                , Misc = {
+                    "Server Path": Path, 
+                    "Hidden Toggle": ShowHidden
+                }
             )
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.QueryServerForADirectoriesContents)    
         self.PWorker.data.connect(self.ConnectionToServerQueryResults)
+        self.PWorker.complete.connect(self.PThread.quit)
+        self.PThread.start()
+
+    def ExecuteTransferringFiles(self, Type, LocalData = None, ServerData = None):
+        self.PThread = QThread(self) 
+        self.PWorker = ThreadWorkerObject.QThreadWorker (
+                SSHObj = self.SSHObject
+                , SFTPObj = self.SFTPObject
+                , Misc = {
+                    "Type" : Type, 
+                    "Local View Data": LocalData,
+                    "Local Path": self.CurrentDirEdit.text(),
+                    "Server View Data": ServerData,
+                    "Server Path": self.ConnectedDirEdit.text(), 
+                }
+            )
+        self.PWorker.moveToThread(self.PThread)
+        self.PThread.started.connect(self.PWorker.TransferFiles)    
+        self.PWorker.data.connect(self.FileTransferResults)
         self.PWorker.complete.connect(self.PThread.quit)
         self.PThread.start()
 
@@ -208,11 +229,15 @@ class SSHClientMainWindow(QMainWindow):
         self.PThread = QThread(self) 
         self.PWorker = ThreadWorkerObject.QThreadWorker (
                 SSHObj = self.SSHObject
-                , Host = self.B_HostEdit.text()
-                , Port = self.B_PortEdit.text()
-                , Username = self.B_UsernameEdit.text()
-                , Password = self.B_PasswordEdit.text()
-                , GenStr = "pwd"    #Command to fetch default SSH directory
+                , Conn = {
+                    "Host": self.B_HostEdit.text(), 
+                    "Port": self.B_PortEdit.text(), 
+                    "Username": self.B_UsernameEdit.text(), 
+                    "Password": self.B_PasswordEdit.text()
+                }
+                , Misc = {
+                    "Command": "pwd", 
+                }
             )
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.ConnectAndOpenSFTP)    
@@ -270,12 +295,6 @@ class SSHClientMainWindow(QMainWindow):
             FullPath = os.path.join(self.ConnectedDirEdit.text(), ItemName)
             self.LoadGivenRemoteDirectory(FullPath, self.ConnectedHiddenToggleCheckbox.isChecked())
 
-    def CurrentDirectoryModelChanged(self, item):
-        print("Current Directory", item, sep=" - ")
-
-    def ConnectedDirectoryModelChanged(self, item):
-        print("Connected Directory", item, sep=" - ")
-
     def ToggleLoggingLevel(self, Level):
         self.actionError.setChecked(False)
         self.actionInfo.setChecked(False)
@@ -325,6 +344,40 @@ class SSHClientMainWindow(QMainWindow):
     def closeEvent(self, event):
         logging.getLogger().removeHandler(self.LogHandler)
         del self.LogHandler
+
+    @pyqtSlot(object)
+    def CurrentDirectoryModelChanged(self, params):
+        try:
+            if not self.IncludesErrors(params):   
+                ItemsObject = json.loads(params["Items"])
+                OriginView = ItemsObject["0"]["Origin View"]
+                if OriginView == "CurrentDirectoryModel":
+                    raise FileExistsError(f"Item(s) already exist in '{self.CurrentDirEdit.text()}'")
+                else:
+                    self.ExecuteTransferringFiles("Download", )
+            else:
+                raise params["Error Thrown"]
+        except FileExistsError as ExistsError:
+            logging.warning(ExistsError) 
+        except Exception as Error: 
+            logging.error(ERRORTEMPLATE.format(type(Error).__name__, Error.args)) 
+
+    @pyqtSlot(object)
+    def ConnectedDirectoryModelChanged(self, params):
+        try:
+            if not self.IncludesErrors(params):   
+                ItemsObject = json.loads(params["Items"])
+                OriginView = ItemsObject["0"]["Origin View"]
+                if OriginView == "ConnectedDirectoryModel":
+                    raise FileExistsError(f"Item(s) already exist in '{self.ConnectedDirEdit.text()}'")
+                else:
+                    self.ExecuteTransferringFiles("Upload", )
+            else:
+                raise params["Error Thrown"]
+        except FileExistsError as ExistsError:
+            logging.warning(ExistsError) 
+        except Exception as Error: 
+            logging.error(ERRORTEMPLATE.format(type(Error).__name__, Error.args)) 
 
     @pyqtSlot(object)
     def ConnectionToServerResults(self, params):
@@ -387,6 +440,16 @@ class SSHClientMainWindow(QMainWindow):
                 self.ConnectedMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
                 self.ConnectedDirEdit.setText(ServerPath)
                 self.ConnectedDirUpOne.setEnabled(self.ConnectedDirEdit.text() != '/')
+            else:
+                raise params["Error Thrown"]
+        except Exception as E:
+            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
+
+    @pyqtSlot(object)
+    def FileTransferResults(self, params):
+        try:
+            if not self.IncludesErrors(params):   
+                pass 
             else:
                 raise params["Error Thrown"]
         except Exception as E:

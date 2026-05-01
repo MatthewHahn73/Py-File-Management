@@ -1,40 +1,55 @@
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 from PyQt6.QtCore import Qt, QMimeData, QThread, QObject, pyqtSignal
+from pathlib import Path
 import json
 
 class CustomTreeModel(QStandardItemModel):
     valueAdded = pyqtSignal(object)
+    MIMEFormatType = "application/x-custom-tree-item"
+
+    def __init__(self, Parent = None):
+        super().__init__()
+        self.OriginView = Parent
 
     def mimeTypes(self):
-        return ["application/x-custom-tree-item"]
+        return [self.MIMEFormatType]
 
     def mimeData(self, indexes):
         if not indexes:
             return None
-        mime_data = QMimeData()
-        # Serialize item text or ID
-        ItemDetails = {
-            "Item Name" : self.itemFromIndex(indexes[0]).text(), 
-            "Item Type" : self.itemFromIndex(indexes[1]).text()
-        }
-        mime_data.setData("application/x-custom-tree-item", json.dumps(ItemDetails).encode('utf-8'))
-        return mime_data
+        MimeData = QMimeData()
+        IndexRows = [indexes[i:i + 3] for i in range(0, len(indexes), 3)]
+        RowsData = {}
+        for RowValue, Row in enumerate(IndexRows):
+            RowsData[RowValue] = {
+                "Origin View" : self.OriginView,
+                "Item Name" : self.itemFromIndex(Row[0]).text(), 
+                "Item Type" : self.itemFromIndex(Row[1]).text(), 
+                "Item Date" : self.itemFromIndex(Row[2]).text()
+            }
+        MimeData.setData(self.MIMEFormatType, json.dumps(RowsData).encode('utf-8'))
+        return MimeData
 
     def dropMimeData(self, data, action, row, column, parent):
-        if action == Qt.DropAction.IgnoreAction:
+        try:
+            if action == Qt.DropAction.IgnoreAction:
+                return True
+            if not data.hasFormat(self.MIMEFormatType):
+                return False
+
+            self.valueAdded.emit({
+                "Items" : data.data(self.MIMEFormatType).data().decode(), 
+            })                     
+                
             return True
-        if not data.hasFormat("application/x-custom-tree-item"):
-            return False
-        
-        self.valueAdded.emit({
-            "Folder Added To" : self.itemFromIndex(parent).text() if parent.isValid() else "N/A",
-            "Item To Be Added" : data.data("application/x-custom-tree-item").data().decode()
-        })         
-            
-        return True
+        except Exception as e:
+            self.valueAdded.emit({
+                "Error Thrown" : e
+            })
+        return False
 
     def flags(self, index):
-        default_flags = super().flags(index)
-        if index.isValid():
-            return default_flags | Qt.ItemFlag.ItemIsDragEnabled | Qt.ItemFlag.ItemIsDropEnabled
-        return default_flags | Qt.ItemFlag.ItemIsDropEnabled
+        default_flags = super().flags(index) 
+        if (index.isValid and index.column() in (0, 1, 2)): # Remove dropping to any sub folders
+            return default_flags & ~Qt.ItemFlag.ItemIsDropEnabled   
+        return default_flags

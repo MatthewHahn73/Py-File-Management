@@ -1,10 +1,27 @@
 """
 SSH Client GUI 
 
+Authored by: Matthew Hahn
+Github: https://github.com/MatthewHahn73/Py-File-Management
+
 Current Bugs
-    -N/A
+    -Progress bar in bottom left of the status bar is not aligned left sometimes
+    -If moved out of the original directory while a file transfer is ongoing, will reload the wrong directory 
+    -Doesn't update the change directory on every change during an ongoing file transfer
+        -E.g. if three files are being transfered, and one is completed, doesn't update that directory with the one file which has completed transfer
 Future Features
-    -N/A
+    -Re-write the TransferFiles function in QThreadWorker to be recurisve and navigate through subdirectories
+    -Incorporate a context menu for both local and remote directories
+        -This context menu should allow:
+            -Renaming files
+            -Deleting files
+            -Encrypting files
+                -See PyAESEncryption.py
+    -Add functionality for the 'Help' and 'Update' buttons in the menu bar
+    -Add functionality for the 'Cancel current operation' button in the menu bar
+    -Improvements to exception handling/error messages
+    -Add more informative information on files in both directories (type of file, size)
+        -Images for folder/files?
 
 Required Software
     -Python 
@@ -19,13 +36,16 @@ Required Software
             -Purpose: SSH Connections
             -Installation: https://pypi.org/project/paramiko/
             -Documentation - https://www.paramiko.org/
-    -Optional Software
-        -Linux
-            -N/A
+        -QLogHandler
+            -Purpose: Custom QObject that handles log messages
+            -Installation: Included (/Assets/Modules/)
+        -QStandardItemModelCustom
+            -Purpose: Custom QStandardItemModel that handles moving items from one QTreeView to another
+            -Installation: Included (/Assets/Modules/)
+        -QThreadWorker
+            -Purpose: Custom QObject that handles paramiko calls on a seperate thread
+            -Installation: Included (/Assets/Modules/)
         
-Functionality
-    -TODO
-
 Loaded GUI Resources (And structure)
     -MainWidget (QWidget)
         -VerticalStructureLayout (QVBoxLayout)
@@ -95,7 +115,7 @@ from Assets.Modules import \
     , QStandardItemModelCustom as StandardItemModelCustomObject
 
 #Constants
-VERSIONNUMBER = "QTSFTP Client v0.25"
+VERSIONNUMBER = "QTSFTP Client v1.0"
 ERRORTEMPLATE = "A(n) {0} exception occurred. Arguments:\n{1!r}"
 
 #Main window
@@ -119,6 +139,10 @@ class SSHClientMainWindow(QMainWindow):
         self.StatusBarLabel = QLabel("Disconnected")
         self.StatusBarLabel.setContentsMargins(5,0,0,0)
         self.SMTPStatusBar.addWidget(self.StatusBarLabel, 1)
+        self.StatusBarProgressBar = QProgressBar()
+        self.StatusBarProgressBar.setFixedSize(200, 25)
+        self.SMTPStatusBar.addWidget(self.StatusBarProgressBar, 1)
+        self.StatusBarProgressBar.hide()
         
         #Set menu item triggers
         self.actionClose.triggered.connect(lambda: self.close())
@@ -201,8 +225,8 @@ class SSHClientMainWindow(QMainWindow):
             )
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.QueryServerForADirectoriesContents)    
-        self.PWorker.data.connect(self.ConnectionToServerQueryResults)
-        self.PWorker.complete.connect(self.PThread.quit)
+        self.PWorker.completeDataSignal.connect(self.ConnectionToServerQueryResults)
+        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
     def ExecuteTransferringFiles(self, Type, LocalData = None, ServerData = None):
@@ -211,7 +235,7 @@ class SSHClientMainWindow(QMainWindow):
                 SSHObj = self.SSHObject
                 , SFTPObj = self.SFTPObject
                 , Misc = {
-                    "Type" : Type, 
+                    "Transfer Type" : Type, 
                     "Local View Data": LocalData,
                     "Local Path": self.CurrentDirEdit.text(),
                     "Server View Data": ServerData,
@@ -219,9 +243,11 @@ class SSHClientMainWindow(QMainWindow):
                 }
             )
         self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.TransferFiles)    
-        self.PWorker.data.connect(self.FileTransferResults)
-        self.PWorker.complete.connect(self.PThread.quit)
+        self.PThread.started.connect(self.PWorker.TransferFiles)  
+        self.PWorker.transferStarted.connect(self.FileTransferStarted)
+        self.PWorker.transferProgress.connect(self.FileTransferProgress)
+        self.PWorker.completeDataSignal.connect(self.FileTransferResults)
+        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
     def ExecuteConnectButton(self):
@@ -241,8 +267,8 @@ class SSHClientMainWindow(QMainWindow):
             )
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.ConnectAndOpenSFTP)    
-        self.PWorker.data.connect(self.ConnectionToServerResults)
-        self.PWorker.complete.connect(self.PThread.quit)
+        self.PWorker.completeDataSignal.connect(self.ConnectionToServerResults)
+        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
     def ExecuteDisconnectButton(self):
@@ -252,8 +278,8 @@ class SSHClientMainWindow(QMainWindow):
             )
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.DisconnectAndCloseSFTP)    
-        self.PWorker.data.connect(self.DisconnectionToServerResults)
-        self.PWorker.complete.connect(self.PThread.quit)
+        self.PWorker.completeDataSignal.connect(self.DisconnectionToServerResults)
+        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
     def ExecuteCancelOperationButton(self):   
@@ -354,7 +380,7 @@ class SSHClientMainWindow(QMainWindow):
                 if OriginView == "CurrentDirectoryModel":
                     raise FileExistsError(f"Item(s) already exist in '{self.CurrentDirEdit.text()}'")
                 else:
-                    self.ExecuteTransferringFiles("Download", )
+                    self.ExecuteTransferringFiles("Download", LocalData=None, ServerData=ItemsObject)
             else:
                 raise params["Error Thrown"]
         except FileExistsError as ExistsError:
@@ -371,7 +397,7 @@ class SSHClientMainWindow(QMainWindow):
                 if OriginView == "ConnectedDirectoryModel":
                     raise FileExistsError(f"Item(s) already exist in '{self.ConnectedDirEdit.text()}'")
                 else:
-                    self.ExecuteTransferringFiles("Upload", )
+                    self.ExecuteTransferringFiles("Upload", LocalData=ItemsObject, ServerData=None)
             else:
                 raise params["Error Thrown"]
         except FileExistsError as ExistsError:
@@ -445,11 +471,39 @@ class SSHClientMainWindow(QMainWindow):
         except Exception as E:
             logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
+    @pyqtSlot(object) 
+    def FileTransferStarted(self, params):
+        try:
+            if not self.IncludesErrors(params):
+                TransferDirection = "←" if params["Transfer Type"] == "Download" else "→"
+                logging.info(f"Starting transfer '{params["Local Path"]}' {TransferDirection} '{params["Server Path"]}'...")  
+                self.StatusBarProgressBar.setRange(0, int(params["Item Size"]))
+                self.StatusBarProgressBar.show()
+            else:
+                raise params["Error Thrown"]
+        except Exception as E:
+            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
+
+    @pyqtSlot(object) 
+    def FileTransferProgress(self, params):
+        try:
+            if not self.IncludesErrors(params):
+                self.StatusBarProgressBar.setValue(params["Current Bytes"])
+            else:
+                raise params["Error Thrown"]
+        except Exception as E:
+            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
+
     @pyqtSlot(object)
     def FileTransferResults(self, params):
+        self.StatusBarProgressBar.hide()
         try:
             if not self.IncludesErrors(params):   
-                pass 
+                if params["Transfer Type"] == "Download":
+                    self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked())
+                elif params["Transfer Type"] == "Upload":
+                    self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()) 
+                logging.info("Transfer complete")
             else:
                 raise params["Error Thrown"]
         except Exception as E:

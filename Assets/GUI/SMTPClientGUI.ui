@@ -28,7 +28,7 @@
    </property>
    <layout class="QGridLayout" name="gridLayout">
     <item row="0" column="0">
-     <layout class="QVBoxLayout" name="VerticalStructureLayout" stretch="0,1,0">
+     <layout class="QVBoxLayout" name="VerticalStructureLayout" stretch="0,1,0,0">
       <property name="sizeConstraint">
        <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
       </property>
@@ -213,49 +213,32 @@
       </item>
       <item>
        <layout class="QGridLayout" name="FileStructureGrid">
-        <item row="0" column="0">
-         <layout class="QHBoxLayout" name="CurrentDirHeaderLayout">
-          <item>
-           <widget class="QLabel" name="CurrentLabel">
-            <property name="text">
-             <string>Local</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="CurrentDirEdit"/>
-          </item>
-          <item>
-           <widget class="QPushButton" name="CurrentDirUpOne">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset>
-              <normaloff>../Icons/go-up.svg</normaloff>../Icons/go-up.svg</iconset>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="CurrentHiddenToggleCheckbox">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset>
-              <normaloff>../Icons/view-hidden.svg</normaloff>../Icons/view-hidden.svg</iconset>
-            </property>
-            <property name="checkable">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
+        <item row="1" column="2">
+         <widget class="QTreeView" name="CurrentMachineDirectoryTree">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>200</height>
+           </size>
+          </property>
+          <property name="editTriggers">
+           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+          </property>
+          <property name="dragDropMode">
+           <enum>QAbstractItemView::DragDropMode::DragDrop</enum>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
+          </property>
+          <property name="sortingEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
         </item>
-        <item row="0" column="1">
+        <item row="0" column="3">
          <layout class="QHBoxLayout" name="ConnectedDirHeaderLayout">
           <item>
-           <widget class="QLabel" name="label">
+           <widget class="QLabel" name="ConnectedLabel">
             <property name="text">
              <string>Server</string>
             </property>
@@ -263,6 +246,17 @@
           </item>
           <item>
            <widget class="QLineEdit" name="ConnectedDirEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ConnectedRefresh">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/view-refresh.svg</normaloff>../Icons/view-refresh.svg</iconset>
+            </property>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="ConnectedDirUpOne">
@@ -291,8 +285,14 @@
           </item>
          </layout>
         </item>
-        <item row="1" column="1">
+        <item row="1" column="3">
          <widget class="QTreeView" name="ConnectedMachineDirectoryTree">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>200</height>
+           </size>
+          </property>
           <property name="editTriggers">
            <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
           </property>
@@ -307,36 +307,67 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QTreeView" name="CurrentMachineDirectoryTree">
-          <property name="editTriggers">
-           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
-          </property>
-          <property name="dragDropMode">
-           <enum>QAbstractItemView::DragDropMode::DragDrop</enum>
-          </property>
-          <property name="selectionMode">
-           <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
-          </property>
-          <property name="sortingEnabled">
-           <bool>true</bool>
-          </property>
-         </widget>
+        <item row="0" column="2">
+         <layout class="QHBoxLayout" name="CurrentDirHeaderLayout">
+          <item>
+           <widget class="QLabel" name="CurrentLabel">
+            <property name="text">
+             <string>Local</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="CurrentDirEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="CurrentRefresh">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/view-refresh.svg</normaloff>../Icons/view-refresh.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="CurrentDirUpOne">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/go-up.svg</normaloff>../Icons/go-up.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="CurrentHiddenToggleCheckbox">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/view-hidden.svg</normaloff>../Icons/view-hidden.svg</iconset>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
       </item>
-      <item>
-       <widget class="QTextBrowser" name="LogOutput">
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>200</height>
-         </size>
-        </property>
-        <property name="openExternalLinks">
-         <bool>true</bool>
+      <item alignment="Qt::AlignmentFlag::AlignHCenter">
+       <widget class="QLabel" name="LogLabel">
+        <property name="text">
+         <string>General Log</string>
         </property>
        </widget>
+      </item>
+      <item>
+       <widget class="QTextBrowser" name="GeneralLog"/>
       </item>
      </layout>
     </item>
@@ -359,6 +390,9 @@
     <addaction name="actionClose"/>
    </widget>
    <widget class="QMenu" name="menuOptions">
+    <property name="layoutDirection">
+     <enum>Qt::LayoutDirection::RightToLeft</enum>
+    </property>
     <property name="title">
      <string>Options</string>
     </property>
@@ -386,8 +420,6 @@
      <string>Server</string>
     </property>
     <addaction name="actionDisconnect"/>
-    <addaction name="separator"/>
-    <addaction name="actionCancel_Current_Operation"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuOptions"/>

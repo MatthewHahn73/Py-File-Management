@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt, QMimeData, QThread, QObject, pyqtSignal
 from pathlib import Path
 import json
 
-class CustomTreeModel(QStandardItemModel):
+class QStandardItemModelCustom(QStandardItemModel):
     valueAdded = pyqtSignal(object)
     MIMEFormatType = "application/x-custom-tree-item"
 

@@ -11,6 +11,7 @@ Current Bugs
         -E.g. if three files are being transfered, and one is completed, doesn't update that directory with the one file which has completed transfer
 Future Features
     -Re-write the TransferFiles function in QThreadWorker to be recurisve and navigate through subdirectories
+    -Add in a queue system that allows for the user to send multiple files over multiple directories
     -Incorporate a context menu for both local and remote directories
         -This context menu should allow:
             -Renaming files
@@ -18,8 +19,6 @@ Future Features
             -Encrypting files
                 -See PyAESEncryption.py
     -Add functionality for the 'Help' and 'Update' buttons in the menu bar
-    -Add functionality for the 'Cancel current operation' button in the menu bar
-    -Improvements to exception handling/error messages
     -Add more informative information on files in both directories (type of file, size)
         -Images for folder/files?
 
@@ -68,13 +67,17 @@ Loaded GUI Resources (And structure)
                     -ConnectedDirEdit (QLineEdit)
                     -ConnectedHiddenToggleCheckbox (QCheckbox)
                     -ConnectedDirUpOne (QPushButton)
+                    -ConnectedLabel (QLabel)
+                    -ConnectedRefresh (QPushButton)
                 -ConnectedMachineDirectoryTree (QTreeView)
                 -CurrentDirHeaderLayout (QHBoxLayout)
                     -CurrentDirEdit (QLineEdit)
                     -CurrentHiddenToggleCheckbox (QCheckbox)
                     -CurrentDirUpOne (QPushButton)
+                    -CurrentLabel (QLabel)
+                    -CurrentRefresh (QPushButton)
                 -CurrentMachineDirectoryTree (QTreeView)
-            -LogOutput (QTextBrowser)
+            -GeneralLog (QTextBrowser)
     -SMTPMenuBar (QMenuBar)
         -menuFile (QMenu)
             -actionClose (QAction)
@@ -95,7 +98,7 @@ Loaded GUI Resources (And structure)
     -SMTPStatusBar (QStatusBar)
 """
 
-import os, logging, sys, subprocess, paramiko, datetime, platform, ctypes, json
+import os, logging, sys, subprocess, paramiko, datetime, platform, ctypes, json, queue
 from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
@@ -112,7 +115,7 @@ from paramiko.ssh_exception import \
 from Assets.Modules import \
     QLogHandler as LogHanderObject \
     , QThreadWorker as ThreadWorkerObject \
-    , QStandardItemModelCustom as StandardItemModelCustomObject
+    , QStandardItemModelCustom as StandardItemModelCustomObject \
 
 #Constants
 VERSIONNUMBER = "QTSFTP Client v1.0"
@@ -128,9 +131,12 @@ class SSHClientMainWindow(QMainWindow):
         self.SSHObject = paramiko.SSHClient()   
         self.SSHObject.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
+        #Instantiate the secondary thread
+        self.PThread = QThread(self) 
+
         #Set up the logger
         self.LogHandler = LogHanderObject.QLogHandler()
-        self.LogHandler.appendPlainText.connect(self.LogOutput.append)
+        self.LogHandler.appendPlainText.connect(self.GeneralLog.append)
         logging.getLogger().addHandler(self.LogHandler)
         logging.getLogger().setLevel(logging.DEBUG)
         logging.getLogger("paramiko").setLevel(logging.WARNING)
@@ -160,6 +166,8 @@ class SSHClientMainWindow(QMainWindow):
         self.CurrentDirUpOne.clicked.connect(self.ExecuteCurrentNavigateOneUpButton)
         self.ConnectedHiddenToggleCheckbox.clicked.connect(self.ExecuteShowConnectedHiddenFilesButton)
         self.ConnectedDirUpOne.clicked.connect(self.ExecuteConnectedNavigateOneUpButton)
+        self.CurrentRefresh.clicked.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()))
+        self.ConnectedRefresh.clicked.connect(lambda: self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()))
 
         #Set the TextEdit triggers
         self.CurrentDirEdit.editingFinished.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()))
@@ -170,10 +178,10 @@ class SSHClientMainWindow(QMainWindow):
         self.ConnectedMachineDirectoryTree.doubleClicked.connect(self.ConnectedItemDoubleClicked)
 
         #Instantiate the custom QStandardItemModels for the trees
-        self.CurrentDirectoryModel = StandardItemModelCustomObject.CustomTreeModel("CurrentDirectoryModel")
+        self.CurrentDirectoryModel = StandardItemModelCustomObject.QStandardItemModelCustom("CurrentDirectoryModel")
         self.CurrentDirectoryModel.valueAdded.connect(self.CurrentDirectoryModelChanged)
 
-        self.ConnectedDirectoryModel = StandardItemModelCustomObject.CustomTreeModel("ConnectedDirectoryModel")
+        self.ConnectedDirectoryModel = StandardItemModelCustomObject.QStandardItemModelCustom("ConnectedDirectoryModel")
         self.ConnectedDirectoryModel.valueAdded.connect(self.ConnectedDirectoryModelChanged)
         
         #Set status label
@@ -204,6 +212,7 @@ class SSHClientMainWindow(QMainWindow):
                                 self.CurrentDirectoryModel.appendRow(DirectoryItemRow)
                     self.CurrentMachineDirectoryTree.setModel(self.CurrentDirectoryModel)
                     self.CurrentMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+                    self.CurrentMachineDirectoryTree.resizeColumnToContents(0)
                     self.CurrentDirEdit.setText(Path)
                     self.CurrentDirUpOne.setEnabled(self.CurrentDirEdit.text() != '/')
                 else:
@@ -214,41 +223,49 @@ class SSHClientMainWindow(QMainWindow):
             logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
     def LoadGivenRemoteDirectory(self, Path, ShowHidden):
-        self.PThread = QThread(self) 
-        self.PWorker = ThreadWorkerObject.QThreadWorker (
-                SSHObj = self.SSHObject
-                , SFTPObj = self.SFTPObject
-                , Misc = {
-                    "Server Path": Path, 
-                    "Hidden Toggle": ShowHidden
-                }
-            )
-        self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.QueryServerForADirectoriesContents)    
-        self.PWorker.completeDataSignal.connect(self.ConnectionToServerQueryResults)
-        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
-        self.PThread.start()
+        SSHTransport = self.SSHObject.get_transport()
+        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+            self.PThread = QThread(self) 
+            self.PWorker = ThreadWorkerObject.QThreadWorker (
+                    SSHObj = self.SSHObject
+                    , SFTPObj = self.SFTPObject
+                    , Misc = {
+                        "Server Path": Path, 
+                        "Hidden Toggle": ShowHidden
+                    }
+                )
+            self.PWorker.moveToThread(self.PThread)
+            self.PThread.started.connect(self.PWorker.QueryServerForADirectoriesContents)    
+            self.PWorker.completeDataSignal.connect(self.ConnectionToServerQueryResults)
+            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
+            self.PThread.start()
+        else:
+            logging.warning(f"Cannot fetch the remote directory without an active SSH connection")
 
     def ExecuteTransferringFiles(self, Type, LocalData = None, ServerData = None):
-        self.PThread = QThread(self) 
-        self.PWorker = ThreadWorkerObject.QThreadWorker (
-                SSHObj = self.SSHObject
-                , SFTPObj = self.SFTPObject
-                , Misc = {
-                    "Transfer Type" : Type, 
-                    "Local View Data": LocalData,
-                    "Local Path": self.CurrentDirEdit.text(),
-                    "Server View Data": ServerData,
-                    "Server Path": self.ConnectedDirEdit.text(), 
-                }
-            )
-        self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.TransferFiles)  
-        self.PWorker.transferStarted.connect(self.FileTransferStarted)
-        self.PWorker.transferProgress.connect(self.FileTransferProgress)
-        self.PWorker.completeDataSignal.connect(self.FileTransferResults)
-        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
-        self.PThread.start()
+        SSHTransport = self.SSHObject.get_transport()
+        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+            self.PThread = QThread(self) 
+            self.PWorker = ThreadWorkerObject.QThreadWorker (
+                    SSHObj = self.SSHObject
+                    , SFTPObj = self.SFTPObject
+                    , Misc = {
+                        "Transfer Type" : Type, 
+                        "Local View Data": LocalData,
+                        "Local Path": self.CurrentDirEdit.text(),
+                        "Server View Data": ServerData,
+                        "Server Path": self.ConnectedDirEdit.text(), 
+                    }
+                )
+            self.PWorker.moveToThread(self.PThread)
+            self.PThread.started.connect(self.PWorker.TransferFiles)  
+            self.PWorker.transferStarted.connect(self.FileTransferStarted)
+            self.PWorker.transferProgress.connect(self.FileTransferProgress)
+            self.PWorker.completeDataSignal.connect(self.FileTransferResults)
+            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
+            self.PThread.start()
+        else:
+            logging.warning(f"Cannot transfer files without an active SFTP connection")
 
     def ExecuteConnectButton(self):
         self.UpdateStatusLabel("Disconnected", "white")
@@ -380,7 +397,10 @@ class SSHClientMainWindow(QMainWindow):
                 if OriginView == "CurrentDirectoryModel":
                     raise FileExistsError(f"Item(s) already exist in '{self.CurrentDirEdit.text()}'")
                 else:
-                    self.ExecuteTransferringFiles("Download", LocalData=None, ServerData=ItemsObject)
+                    if not self.PThread.isRunning():
+                        self.ExecuteTransferringFiles("Download", LocalData=None, ServerData=ItemsObject)
+                    else: 
+                        logging.warning("Cannot start a new transfer while another process is active")
             else:
                 raise params["Error Thrown"]
         except FileExistsError as ExistsError:
@@ -397,7 +417,10 @@ class SSHClientMainWindow(QMainWindow):
                 if OriginView == "ConnectedDirectoryModel":
                     raise FileExistsError(f"Item(s) already exist in '{self.ConnectedDirEdit.text()}'")
                 else:
-                    self.ExecuteTransferringFiles("Upload", LocalData=ItemsObject, ServerData=None)
+                    if not self.PThread.isRunning():
+                        self.ExecuteTransferringFiles("Upload", LocalData=ItemsObject, ServerData=None)
+                    else: 
+                        logging.warning("Cannot start a new transfer while another process is active")
             else:
                 raise params["Error Thrown"]
         except FileExistsError as ExistsError:
@@ -410,7 +433,8 @@ class SSHClientMainWindow(QMainWindow):
         try:
             if not self.IncludesErrors(params):   
                 self.SSHObject, self.SFTPObject = params["SSH Object"], params["SFTP Object"]
-                if (self.SSHObject.get_transport().is_active()) and not (self.SFTPObject.sock.closed):
+                SSHTransport = self.SSHObject.get_transport()
+                if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
                     self.ToggleServerSpecificMenuButtons(True)
                     TransportInfo = self.SSHObject.get_transport().getpeername()
                     self.UpdateStatusLabel(f"Connected to {TransportInfo[0]}:{TransportInfo[1]}", "#2bfb75")
@@ -464,6 +488,7 @@ class SSHClientMainWindow(QMainWindow):
                             self.ConnectedDirectoryModel.appendRow(DirectoryItemRow)
                 self.ConnectedMachineDirectoryTree.setModel(self.ConnectedDirectoryModel)
                 self.ConnectedMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+                self.ConnectedMachineDirectoryTree.resizeColumnToContents(0)
                 self.ConnectedDirEdit.setText(ServerPath)
                 self.ConnectedDirUpOne.setEnabled(self.ConnectedDirEdit.text() != '/')
             else:
@@ -498,7 +523,7 @@ class SSHClientMainWindow(QMainWindow):
     def FileTransferResults(self, params):
         self.StatusBarProgressBar.hide()
         try:
-            if not self.IncludesErrors(params):   
+            if not self.IncludesErrors(params): 
                 if params["Transfer Type"] == "Download":
                     self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked())
                 elif params["Transfer Type"] == "Upload":

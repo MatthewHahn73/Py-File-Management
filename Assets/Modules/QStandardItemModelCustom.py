@@ -19,14 +19,14 @@ class QStandardItemModelCustom(QStandardItemModel):
             return None
         MimeData = QMimeData()
         IndexRows = [indexes[i:i + 3] for i in range(0, len(indexes), 3)]
-        RowsData = {}
-        for RowValue, Row in enumerate(IndexRows):
-            RowsData[RowValue] = {
+        RowsData = []
+        for Row in IndexRows:
+            RowsData.append({
                 "Origin View" : self.OriginView,
                 "Item Name" : self.itemFromIndex(Row[0]).text(), 
                 "Item Type" : self.itemFromIndex(Row[1]).text(), 
                 "Item Date" : self.itemFromIndex(Row[2]).text()
-            }
+            })
         MimeData.setData(self.MIMEFormatType, json.dumps(RowsData).encode('utf-8'))
         return MimeData
 

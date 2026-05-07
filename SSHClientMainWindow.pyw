@@ -10,14 +10,14 @@ Current Bugs
     -Doesn't update the change directory on every change during an ongoing file transfer
         -E.g. if three files are being transfered, and one is completed, doesn't update that directory with the one file which has completed transfer
 Future Features
-    -Re-write the TransferFiles function in QThreadWorker to be recurisve and navigate through subdirectories
-    -Add in a queue system that allows for the user to send multiple files over multiple directories
+    -Allow for transfer of a single file by double clicking that file
     -Incorporate a context menu for both local and remote directories
         -This context menu should allow:
             -Renaming files
             -Deleting files
             -Encrypting files
                 -See PyAESEncryption.py
+    -Add in a queue system that allows for the user to send multiple files over multiple directories
     -Add functionality for the 'Help' and 'Update' buttons in the menu bar
     -Add more informative information on files in both directories (type of file, size)
         -Images for folder/files?
@@ -153,7 +153,6 @@ class SSHClientMainWindow(QMainWindow):
         #Set menu item triggers
         self.actionClose.triggered.connect(lambda: self.close())
         self.actionDisconnect.triggered.connect(self.ExecuteDisconnectButton)
-        self.actionCancel_Current_Operation.triggered.connect(self.ExecuteCancelOperationButton)
         self.actionShow_Password.triggered.connect(self.TogglePasswords)
         self.actionError.triggered.connect(lambda: self.ToggleLoggingLevel("Error"))
         self.actionWarning.triggered.connect(lambda: self.ToggleLoggingLevel("Warning"))
@@ -192,36 +191,19 @@ class SSHClientMainWindow(QMainWindow):
         self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked())
 
     def LoadGivenLocalDirectory(self, Path, ShowHidden):
-        try:
-            if os.path.exists(Path):
-                if not os.path.isfile(Path):
-                    self.CurrentDirectoryModel.clear()
-                    self.CurrentDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
-                    for DirectoryItem in os.listdir(Path):
-                        DirectoryItemPath = f"{Path}/{DirectoryItem}" 
-                        IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
-                        if (not IsHiddenItem) or (IsHiddenItem and ShowHidden):
-                            if os.path.exists(DirectoryItemPath):
-                                if os.path.isdir(DirectoryItemPath):
-                                    ItemType = "Folder"
-                                elif os.path.isfile(DirectoryItemPath):
-                                    ItemType = "File"
-                                ItemName = os.path.basename(DirectoryItemPath)
-                                ItemModified = str(datetime.datetime.fromtimestamp(os.stat(DirectoryItemPath).st_mtime).strftime('%Y-%m-%d %I:%M %p'))
-                                DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
-                                self.CurrentDirectoryModel.appendRow(DirectoryItemRow)
-                    self.CurrentMachineDirectoryTree.setModel(self.CurrentDirectoryModel)
-                    self.CurrentMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
-                    self.CurrentMachineDirectoryTree.resizeColumnToContents(0)
-                    self.CurrentDirEdit.setText(Path)
-                    self.CurrentDirUpOne.setEnabled(self.CurrentDirEdit.text() != '/')
-                else:
-                    raise Exception(f"'{Path}' is a file, not a directory")
-            else:
-                raise Exception(f"The path '{Path}' doesn't exist")
-        except Exception as E:
-            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
-
+        self.PThread = QThread(self) 
+        self.PWorker = ThreadWorkerObject.QThreadWorker (
+                Misc = {
+                    "Local Path": Path, 
+                    "Hidden Toggle": ShowHidden
+                }
+            )
+        self.PWorker.moveToThread(self.PThread)
+        self.PThread.started.connect(self.PWorker.QueryDirectoriesContentsLocalRequest)    
+        self.PWorker.completeDataSignal.connect(self.LocalQueryResults)
+        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
+        self.PThread.start()
+        
     def LoadGivenRemoteDirectory(self, Path, ShowHidden):
         SSHTransport = self.SSHObject.get_transport()
         if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
@@ -235,14 +217,14 @@ class SSHClientMainWindow(QMainWindow):
                     }
                 )
             self.PWorker.moveToThread(self.PThread)
-            self.PThread.started.connect(self.PWorker.QueryServerForADirectoriesContents)    
-            self.PWorker.completeDataSignal.connect(self.ConnectionToServerQueryResults)
+            self.PThread.started.connect(self.PWorker.QueryDirectoriesContentsServerRequest)    
+            self.PWorker.completeDataSignal.connect(self.ServerQueryResults)
             self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
             self.PThread.start()
         else:
             logging.warning(f"Cannot fetch the remote directory without an active SSH connection")
 
-    def ExecuteTransferringFiles(self, Type, LocalData = None, ServerData = None):
+    def ExecuteTransferringFiles(self, Type, TransferData):
         SSHTransport = self.SSHObject.get_transport()
         if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
             self.PThread = QThread(self) 
@@ -251,14 +233,13 @@ class SSHClientMainWindow(QMainWindow):
                     , SFTPObj = self.SFTPObject
                     , Misc = {
                         "Transfer Type" : Type, 
-                        "Local View Data": LocalData,
+                        "Transfer Data": TransferData,
                         "Local Path": self.CurrentDirEdit.text(),
-                        "Server View Data": ServerData,
                         "Server Path": self.ConnectedDirEdit.text(), 
                     }
                 )
             self.PWorker.moveToThread(self.PThread)
-            self.PThread.started.connect(self.PWorker.TransferFiles)  
+            self.PThread.started.connect(self.PWorker.TransferFilesServerRequest)  
             self.PWorker.transferStarted.connect(self.FileTransferStarted)
             self.PWorker.transferProgress.connect(self.FileTransferProgress)
             self.PWorker.completeDataSignal.connect(self.FileTransferResults)
@@ -298,9 +279,6 @@ class SSHClientMainWindow(QMainWindow):
         self.PWorker.completeDataSignal.connect(self.DisconnectionToServerResults)
         self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
-
-    def ExecuteCancelOperationButton(self):   
-        pass
 
     def ExecuteShowCurrentHiddenFilesButton(self, Checked):
         CurrentDir = QDir.currentPath()
@@ -393,12 +371,12 @@ class SSHClientMainWindow(QMainWindow):
         try:
             if not self.IncludesErrors(params):   
                 ItemsObject = json.loads(params["Items"])
-                OriginView = ItemsObject["0"]["Origin View"]
+                OriginView = ItemsObject[0]["Origin View"]
                 if OriginView == "CurrentDirectoryModel":
                     raise FileExistsError(f"Item(s) already exist in '{self.CurrentDirEdit.text()}'")
                 else:
                     if not self.PThread.isRunning():
-                        self.ExecuteTransferringFiles("Download", LocalData=None, ServerData=ItemsObject)
+                        self.ExecuteTransferringFiles("Download", ItemsObject)
                     else: 
                         logging.warning("Cannot start a new transfer while another process is active")
             else:
@@ -413,12 +391,12 @@ class SSHClientMainWindow(QMainWindow):
         try:
             if not self.IncludesErrors(params):   
                 ItemsObject = json.loads(params["Items"])
-                OriginView = ItemsObject["0"]["Origin View"]
+                OriginView = ItemsObject[0]["Origin View"]
                 if OriginView == "ConnectedDirectoryModel":
                     raise FileExistsError(f"Item(s) already exist in '{self.ConnectedDirEdit.text()}'")
                 else:
                     if not self.PThread.isRunning():
-                        self.ExecuteTransferringFiles("Upload", LocalData=ItemsObject, ServerData=None)
+                        self.ExecuteTransferringFiles("Upload", ItemsObject)
                     else: 
                         logging.warning("Cannot start a new transfer while another process is active")
             else:
@@ -472,17 +450,42 @@ class SSHClientMainWindow(QMainWindow):
             logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
     @pyqtSlot(object)
-    def ConnectionToServerQueryResults(self, params):
+    def LocalQueryResults(self, params):
+        try:
+            if not self.IncludesErrors(params):   
+                LocalPath, ShowHidden, DirectoryItemsList = params["Local Path"], params["Hidden Toggle"], params["Directory Items"]
+                self.CurrentDirectoryModel.clear() 
+                self.CurrentDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
+                for DirectoryItem in DirectoryItemsList:
+                    DirectoryItemPath = os.path.join(LocalPath, DirectoryItem["Item Name"])
+                    IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
+                    if (not IsHiddenItem) or (IsHiddenItem and ShowHidden):
+                        ItemName, ItemType, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Date"]
+                        if ItemName != None:
+                            DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
+                            self.CurrentDirectoryModel.appendRow(DirectoryItemRow)
+                self.CurrentMachineDirectoryTree.setModel(self.CurrentDirectoryModel)
+                self.CurrentMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+                self.CurrentMachineDirectoryTree.resizeColumnToContents(0)
+                self.CurrentDirEdit.setText(LocalPath)
+                self.CurrentDirUpOne.setEnabled(self.CurrentDirEdit.text() != '/')
+            else:
+                raise params["Error Thrown"]
+        except Exception as E:
+            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
+
+    @pyqtSlot(object)
+    def ServerQueryResults(self, params):
         try:
             if not self.IncludesErrors(params):   
                 self.SSHObject, self.SFTPObject, ServerPath, ShowHidden, DirectoryItemsList = params["SSH Object"], params["SFTP Object"], params["Server Path"], params["Hidden Toggle"], params["Directory Items"]
                 self.ConnectedDirectoryModel.clear() 
                 self.ConnectedDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
                 for DirectoryItem in DirectoryItemsList:
-                    DirectoryItemPath = os.path.join(ServerPath, DirectoryItem["Name"])
+                    DirectoryItemPath = os.path.join(ServerPath, DirectoryItem["Item Name"])
                     IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
                     if (not IsHiddenItem) or (IsHiddenItem and ShowHidden):
-                        ItemName, ItemType, ItemModified = DirectoryItem["Name"], DirectoryItem["Type"], DirectoryItem["Date Modified"]
+                        ItemName, ItemType, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Date"]
                         if ItemName != None:
                             DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
                             self.ConnectedDirectoryModel.appendRow(DirectoryItemRow)

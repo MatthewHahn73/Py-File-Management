@@ -248,17 +248,6 @@
            <widget class="QLineEdit" name="ConnectedDirEdit"/>
           </item>
           <item>
-           <widget class="QPushButton" name="ConnectedRefresh">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset>
-              <normaloff>../Icons/view-refresh.svg</normaloff>../Icons/view-refresh.svg</iconset>
-            </property>
-           </widget>
-          </item>
-          <item>
            <widget class="QPushButton" name="ConnectedDirUpOne">
             <property name="text">
              <string/>
@@ -266,6 +255,17 @@
             <property name="icon">
              <iconset>
               <normaloff>../Icons/go-up.svg</normaloff>../Icons/go-up.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="ConnectedRefresh">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/view-refresh.svg</normaloff>../Icons/view-refresh.svg</iconset>
             </property>
            </widget>
           </item>
@@ -320,17 +320,6 @@
            <widget class="QLineEdit" name="CurrentDirEdit"/>
           </item>
           <item>
-           <widget class="QPushButton" name="CurrentRefresh">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset>
-              <normaloff>../Icons/view-refresh.svg</normaloff>../Icons/view-refresh.svg</iconset>
-            </property>
-           </widget>
-          </item>
-          <item>
            <widget class="QPushButton" name="CurrentDirUpOne">
             <property name="text">
              <string/>
@@ -338,6 +327,17 @@
             <property name="icon">
              <iconset>
               <normaloff>../Icons/go-up.svg</normaloff>../Icons/go-up.svg</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="CurrentRefresh">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>../Icons/view-refresh.svg</normaloff>../Icons/view-refresh.svg</iconset>
             </property>
            </widget>
           </item>

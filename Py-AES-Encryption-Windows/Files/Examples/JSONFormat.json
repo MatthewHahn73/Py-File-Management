@@ -1,8 +1,0 @@
-{
-    "Key1" : "Value", 
-    "Key2" : "Value", 
-    "Key3" : {
-        "SubKey1" : "Value", 
-        "SubKey2" : "Value"
-    }
-}

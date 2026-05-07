@@ -1,5 +1,5 @@
 import logging
-from PyQt5.QtCore import *
+from PyQt6.QtCore import pyqtSignal, QObject
 
 class QLogHandler(logging.Handler, QObject):
     appendPlainText = pyqtSignal(str)

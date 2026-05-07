@@ -202,18 +202,18 @@ class QThreadWorker(QObject):
                 if TypeOfTransfer == "Download":
                     NextFolderLocal = f"{LocalViewPath}/{Item["Item Name"]}"
                     NextFolderServer = f"{ServerViewPath}/{Item["Item Name"]}"
-                    if not os.path.exists(CurrentFolderLocal):
-                        os.mkdir(CurrentFolderLocal)
-                    QueryResults = self.QueryServerForADirectoriesContentsRemote(CurrentFolderServer)
+                    if not os.path.exists(NextFolderLocal):
+                        os.mkdir(NextFolderLocal)
+                    QueryResults = self.QueryServerForADirectoriesContentsRemote(NextFolderServer)
                     self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
                 elif TypeOfTransfer == "Upload":
-                    CurrentFolderLocal = f"{LocalViewPath}/{Item["Item Name"]}"
-                    CurrentFolderServer = f"{ServerViewPath}/{Item["Item Name"]}"
+                    NextFolderLocal = f"{LocalViewPath}/{Item["Item Name"]}"
+                    NextFolderServer = f"{ServerViewPath}/{Item["Item Name"]}"
                     NextPathItems = os.listdir()
-                    if not self.ReturnRemoteDirectory(CurrentFolderServer):
-                        self.SFTPObject.mkdir(CurrentFolderServer)
-                    QueryResults = self.QueryServerForADirectoriesContentsLocal(CurrentFolderLocal)
-                    self.TransferFiles(QueryResults, CurrentFolderLocal, CurrentFolderServer, TypeOfTransfer)
+                    if not self.ReturnRemoteDirectory(NextFolderServer):
+                        self.SFTPObject.mkdir(NextFolderServer)
+                    QueryResults = self.QueryServerForADirectoriesContentsLocal(NextFolderLocal)
+                    self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
             #Base case - Fetches or uploads file in the list
             elif Item["Item Type"] == "File":
                 if TypeOfTransfer == "Download":

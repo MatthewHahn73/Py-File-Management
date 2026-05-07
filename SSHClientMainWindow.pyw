@@ -9,6 +9,7 @@ Current Bugs
     -If moved out of the original directory while a file transfer is ongoing, will reload the wrong directory 
     -Doesn't update the change directory on every change during an ongoing file transfer
         -E.g. if three files are being transfered, and one is completed, doesn't update that directory with the one file which has completed transfer
+    -If a directory is deleted while in that directory and the refresh button is hit, will throw inaccurate error message
 Future Features
     -Allow for transfer of a single file by double clicking that file
     -Incorporate a context menu for both local and remote directories

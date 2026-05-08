@@ -150,7 +150,7 @@ class SSHClientMainWindow(QMainWindow):
         self.StatusBarProgressBar.setFixedSize(200, 25)
         self.SMTPStatusBar.addWidget(self.StatusBarProgressBar, 1)
         self.StatusBarProgressBar.hide()
-        
+
         #Set menu item triggers
         self.actionClose.triggered.connect(lambda: self.close())
         self.actionDisconnect.triggered.connect(self.ExecuteDisconnectButton)

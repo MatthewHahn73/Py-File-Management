@@ -1,5 +1,5 @@
-# Py-File-Management
-<p>Server and client python scripts for maintaining an encrypted file server</p>
+# Py-SFTP-Client
+<p>Client, built in QT, that allows for dragging and dropping files between computers over a local network</p>
 
 <h1>Required Dependencies</h1>
     <ul>

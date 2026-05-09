@@ -10,18 +10,23 @@ Current Bugs
     -Doesn't update the change directory on every change during an ongoing file transfer
         -E.g. if three files are being transfered, and one is completed, doesn't update that directory with the one file which has completed transfer
     -If a directory is deleted while in that directory and the refresh button is hit, will throw inaccurate error message
+    -Attempting to navigate out of a menu while a download/upload is in progress will throw errors and corrupt the secondary thread
+        -Disable navigation features when download is in progress?
+    -Rare instance where deleting log message doesn't show up when deleting a file
+        -Only replicable on local directory
 Future Features
-    -Allow for transfer of a single file by double clicking that file
+    -Add in the ability to delete/upload/download multiple highlighted files with context menu
     -Incorporate a context menu for both local and remote directories
         -This context menu should allow:
-            -Renaming files
-            -Deleting files
             -Encrypting files
                 -See PyAESEncryption.py
     -Add in a queue system that allows for the user to send multiple files over multiple directories
     -Add functionality for the 'Help' and 'Update' buttons in the menu bar
     -Add more informative information on files in both directories (type of file, size)
         -Images for folder/files?
+    -Add in a confirmation prompt for deletions
+    -Add in icon for the application
+    -Modify stylesheet to be more modern 
 
 Required Software
     -Python 

@@ -91,7 +91,7 @@ class QThreadWorker(QObject):
     def QueryServerForADirectoriesContentsRemote(self, ServerPath):
         PathAttributes = self.SFTPObject.lstat(ServerPath)
         if stat.S_ISREG(PathAttributes.st_mode):
-            return Exception(f"Server path '{ServerPath}' cannot be a file")
+            return Exception(f"Cannot navigate to '{ServerPath}'. It is a file")
         else:
             DirectoryItemList = []
             for Item in self.SFTPObject.listdir_attr(ServerPath): 
@@ -128,7 +128,7 @@ class QThreadWorker(QObject):
 
     def QueryServerForADirectoriesContentsLocal(self, LocalPath):
         if not os.path.isdir(LocalPath):
-            return Exception(f"Local path '{LocalPath}' cannot be a file")
+            return Exception(f"Cannot navigate to '{LocalPath}'. It is a file")
         else:
             DirectoryItems = os.listdir(LocalPath)
             DirectoryItemList = []
@@ -197,7 +197,7 @@ class QThreadWorker(QObject):
 
     def TransferFiles(self, TransferItems, LocalViewPath, ServerViewPath, TypeOfTransfer):             
         for Item in TransferItems:
-            #Recursion case. Need to fetch the next directories attributes and call current function again
+            #Recursion case. Fetches the next directory's attributes and call the function again
             if Item["Item Type"] == "Folder":
                 if TypeOfTransfer == "Download":
                     NextFolderLocal = f"{LocalViewPath}/{Item["Item Name"]}"

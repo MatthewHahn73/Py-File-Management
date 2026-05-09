@@ -99,7 +99,7 @@ Loaded GUI Resources (And structure)
     -SMTPStatusBar (QStatusBar)
 """
 
-import os, logging, sys, subprocess, paramiko, datetime, platform, ctypes, json, queue
+import os, logging, sys, paramiko, platform, ctypes, json, shutil
 from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
@@ -172,17 +172,22 @@ class SSHClientMainWindow(QMainWindow):
         #Set the TextEdit triggers
         self.CurrentDirEdit.editingFinished.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()))
         self.ConnectedDirEdit.editingFinished.connect(lambda: self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()))
-                
-        #Set the directory tree triggers
+
+        #Set the tree triggers
         self.CurrentMachineDirectoryTree.doubleClicked.connect(self.CurrentItemDoubleClicked)
+        self.CurrentMachineDirectoryTree.customContextMenuRequested.connect(self.CurrentContextMenuGenerated)
+
         self.ConnectedMachineDirectoryTree.doubleClicked.connect(self.ConnectedItemDoubleClicked)
+        self.ConnectedMachineDirectoryTree.customContextMenuRequested.connect(self.ConnectedContextMenuGenerated)
 
         #Instantiate the custom QStandardItemModels for the trees
         self.CurrentDirectoryModel = StandardItemModelCustomObject.QStandardItemModelCustom("CurrentDirectoryModel")
         self.CurrentDirectoryModel.valueAdded.connect(self.CurrentDirectoryModelChanged)
+        self.CurrentDirectoryModel.customItemChanged.connect(self.RenameLocalFile)
 
         self.ConnectedDirectoryModel = StandardItemModelCustomObject.QStandardItemModelCustom("ConnectedDirectoryModel")
         self.ConnectedDirectoryModel.valueAdded.connect(self.ConnectedDirectoryModelChanged)
+        self.ConnectedDirectoryModel.customItemChanged.connect(self.RenameRemoteFile)
         
         #Set status label
         self.UpdateStatusLabel("Disconnected", "white")
@@ -281,6 +286,35 @@ class SSHClientMainWindow(QMainWindow):
         self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
+    def RenameRemoteFile(self, item):
+        SSHTransport = self.SSHObject.get_transport()
+        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+            pass    #TODO: Write this to rename the server file in the seperate thread
+        else:
+            logging.warning(f"Cannot transfer files without an active SFTP connection")
+
+    def DeleteRemoteFiles(self, item):
+        SSHTransport = self.SSHObject.get_transport()
+        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+            pass    #TODO: Write this to delete the server file/folder in the seperate thread
+        else:
+            logging.warning(f"Cannot transfer files without an active SFTP connection")
+
+    def RenameLocalFile(self, index, role, OldValue, NewValue):
+        if NewValue.strip() != OldValue.strip():
+            OldPath = os.path.join(self.CurrentDirEdit.text(), OldValue)
+            NewPath = os.path.join(self.CurrentDirEdit.text(), NewValue)
+            os.rename(OldPath, NewPath)
+            self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()) 
+
+    def DeleteLocalFiles(self, Path):
+        if os.path.isdir(Path):
+            for PathItem in os.listdir(Path):
+                self.DeleteLocalFiles(os.path.join(Path, PathItem)) 
+            os.rmdir(Path)
+        elif os.path.isfile(Path):
+            os.remove(Path)
+
     def ExecuteShowCurrentHiddenFilesButton(self, Checked):
         CurrentDir = QDir.currentPath()
         ChangedIconPath = f"{CurrentDir}/Assets/Icons/view-visible.svg" if Checked else f"{CurrentDir}/Assets/Icons/view-hidden.svg"
@@ -288,8 +322,8 @@ class SSHClientMainWindow(QMainWindow):
         self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), Checked) 
 
     def ExecuteShowConnectedHiddenFilesButton(self, Checked):
-        CurrentDir = QDir.currentPath()
-        ChangedIconPath = f"{CurrentDir}/Assets/Icons/view-visible.svg" if Checked else f"{CurrentDir}/Assets/Icons/view-hidden.svg"
+        ConnectedDir = QDir.currentPath()
+        ChangedIconPath = f"{ConnectedDir}/Assets/Icons/view-visible.svg" if Checked else f"{ConnectedDir}/Assets/Icons/view-hidden.svg"
         self.ConnectedHiddenToggleCheckbox.setIcon(QIcon(ChangedIconPath))
         self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), Checked) 
 
@@ -316,6 +350,76 @@ class SSHClientMainWindow(QMainWindow):
             ItemName = PathIndex.data()
             FullPath = os.path.join(self.ConnectedDirEdit.text(), ItemName)
             self.LoadGivenRemoteDirectory(FullPath, self.ConnectedHiddenToggleCheckbox.isChecked())
+
+    def CurrentContextMenuGenerated(self, position):
+        ItemSelectedIndex = self.CurrentMachineDirectoryTree.indexAt(position) 
+        if ItemSelectedIndex.isValid():
+            #Deselect any other selected items and select the current index item
+            self.CurrentMachineDirectoryTree.clearSelection()
+            self.CurrentMachineDirectoryTree.setCurrentIndex(ItemSelectedIndex)
+
+            #Create menu items 
+            CurrentContextMenu = QMenu()
+            UploadAction = CurrentContextMenu.addAction("Upload")
+            CurrentContextMenu.addSeparator()
+            RenameAction = CurrentContextMenu.addAction("Rename")
+            DeleteAction = CurrentContextMenu.addAction("Delete")
+
+            #Set menu item values to variables
+            MenuItemExecuted = CurrentContextMenu.exec(self.CurrentMachineDirectoryTree.viewport().mapToGlobal(position))
+            ItemName = ItemSelectedIndex.siblingAtColumn(0).data()
+            ItemType = ItemSelectedIndex.siblingAtColumn(1).data()
+            ItemDate = ItemSelectedIndex.siblingAtColumn(2).data()
+
+            #Context menu item selected logic
+            if MenuItemExecuted == UploadAction:
+                self.ExecuteTransferringFiles(
+                    "Upload"
+                    , {
+                        "Origin View" : "CurrentDirectoryModel",
+                        "Item Name" : ItemName, 
+                        "Item Type" : ItemType, 
+                        "Item Date" : ItemDate
+                    })
+            elif MenuItemExecuted == RenameAction:
+                self.CurrentMachineDirectoryTree.edit(ItemSelectedIndex.siblingAtColumn(0)) 
+            elif MenuItemExecuted == DeleteAction:
+                self.DeleteLocalFiles(os.path.join(self.CurrentDirEdit.text(), ItemName))
+                self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()) 
+                
+    def ConnectedContextMenuGenerated(self, position):
+        ItemSelectedIndex = self.ConnectedMachineDirectoryTree.indexAt(position) 
+        if ItemSelectedIndex.isValid():
+            #Deselect any other selected items and select the current index item
+            self.ConnectedMachineDirectoryTree.clearSelection()
+            self.ConnectedMachineDirectoryTree.setCurrentIndex(ItemSelectedIndex)
+
+            #Create menu items 
+            CurrentContextMenu = QMenu()
+            DownloadAction = CurrentContextMenu.addAction("Download")
+            CurrentContextMenu.addSeparator()
+            RenameAction = CurrentContextMenu.addAction("Rename")
+            DeleteAction = CurrentContextMenu.addAction("Delete")
+
+            MenuItemExecuted = CurrentContextMenu.exec(self.ConnectedMachineDirectoryTree.viewport().mapToGlobal(position))
+            ItemName = ItemSelectedIndex.siblingAtColumn(0).data()
+            ItemType = ItemSelectedIndex.siblingAtColumn(1).data()
+            ItemDate = ItemSelectedIndex.siblingAtColumn(2).data()
+
+            #Context menu item selected logic
+            if MenuItemExecuted == DownloadAction:
+                self.ExecuteTransferringFiles(
+                    "Download"
+                    , {
+                        "Origin View" : "ConnectedDirectoryModel",
+                        "Item Name" : ItemName, 
+                        "Item Type" : ItemType, 
+                        "Item Date" : ItemDate
+                    })
+            elif MenuItemExecuted == RenameAction:
+                self.ConnectedMachineDirectoryTree.edit(ItemSelectedIndex.siblingAtColumn(0))   
+            elif MenuItemExecuted == DeleteAction:
+                self.DeleteRemoteFiles(os.path.join(self.ConnectedDirEdit.text(), ItemName))
 
     def ToggleLoggingLevel(self, Level):
         self.actionError.setChecked(False)
@@ -545,7 +649,7 @@ if __name__ == "__main__":
     else:
         with open(StylesheetPath) as Stylesheet:
             app = QApplication(sys.argv)
-            #app.setStyleSheet(Stylesheet.read())
+            app.setStyleSheet(Stylesheet.read())
             Clipboard = app.clipboard()
             Main = SSHClientMainWindow()
             Main.setWindowTitle(VERSIONNUMBER)

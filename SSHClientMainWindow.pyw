@@ -286,34 +286,63 @@ class SSHClientMainWindow(QMainWindow):
         self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
-    def RenameRemoteFile(self, item):
+    def RenameRemoteFile(self, Index, Role, OldValue, NewValue):
         SSHTransport = self.SSHObject.get_transport()
         if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
-            pass    #TODO: Write this to rename the server file in the seperate thread
+            self.PThread = QThread(self) 
+            self.PWorker = ThreadWorkerObject.QThreadWorker (
+                    SSHObj = self.SSHObject
+                    , SFTPObj = self.SFTPObject
+                    , Misc = {
+                        "Old Name": os.path.join(self.ConnectedDirEdit.text(), OldValue), 
+                        "New Name": os.path.join(self.ConnectedDirEdit.text(), NewValue)
+                    }
+                )
+            self.PWorker.moveToThread(self.PThread)
+            self.PThread.started.connect(self.PWorker.RenameFileOrDirectory)  
+            self.PWorker.completeDataSignal.connect(self.ServerFileRenamingResults)
+            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
+            self.PThread.start()
         else:
-            logging.warning(f"Cannot transfer files without an active SFTP connection")
+            logging.warning(f"Cannot rename server files without an active SFTP connection")
 
-    def DeleteRemoteFiles(self, item):
+    def DeleteRemoteFiles(self, Path):
         SSHTransport = self.SSHObject.get_transport()
         if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
-            pass    #TODO: Write this to delete the server file/folder in the seperate thread
+            self.PThread = QThread(self) 
+            self.PWorker = ThreadWorkerObject.QThreadWorker (
+                    SSHObj = self.SSHObject
+                    , SFTPObj = self.SFTPObject
+                    , Misc = {
+                        "Server Path": Path
+                    }
+                )
+            self.PWorker.moveToThread(self.PThread)
+            self.PThread.started.connect(self.PWorker.DeleteFileOrDirectoryServerRequest)              
+            self.PWorker.deleteCompleted.connect(self.ServerFileorDirectoryDeleteResults)
+            self.PWorker.completeDataSignal.connect(self.ServerFileorDirectoryDeleteCompleted)
+            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
+            self.PThread.start()
         else:
-            logging.warning(f"Cannot transfer files without an active SFTP connection")
-
-    def RenameLocalFile(self, index, role, OldValue, NewValue):
+            logging.warning(f"Cannot delete server files without an active SFTP connection")
+            
+    def RenameLocalFile(self, Index, Role, OldValue, NewValue):
         if NewValue.strip() != OldValue.strip():
             OldPath = os.path.join(self.CurrentDirEdit.text(), OldValue)
             NewPath = os.path.join(self.CurrentDirEdit.text(), NewValue)
             os.rename(OldPath, NewPath)
             self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()) 
+            logging.info(f"Local file successfully renamed '{OldPath}' → '{NewPath}'")
 
     def DeleteLocalFiles(self, Path):
         if os.path.isdir(Path):
             for PathItem in os.listdir(Path):
                 self.DeleteLocalFiles(os.path.join(Path, PathItem)) 
             os.rmdir(Path)
+            logging.info(f"Local directory successfully deleted '{Path}'")
         elif os.path.isfile(Path):
             os.remove(Path)
+            logging.info(f"Local file successfully deleted '{Path}'")
 
     def ExecuteShowCurrentHiddenFilesButton(self, Checked):
         CurrentDir = QDir.currentPath()
@@ -375,12 +404,12 @@ class SSHClientMainWindow(QMainWindow):
             if MenuItemExecuted == UploadAction:
                 self.ExecuteTransferringFiles(
                     "Upload"
-                    , {
+                    , [{
                         "Origin View" : "CurrentDirectoryModel",
                         "Item Name" : ItemName, 
                         "Item Type" : ItemType, 
                         "Item Date" : ItemDate
-                    })
+                    }])
             elif MenuItemExecuted == RenameAction:
                 self.CurrentMachineDirectoryTree.edit(ItemSelectedIndex.siblingAtColumn(0)) 
             elif MenuItemExecuted == DeleteAction:
@@ -410,12 +439,12 @@ class SSHClientMainWindow(QMainWindow):
             if MenuItemExecuted == DownloadAction:
                 self.ExecuteTransferringFiles(
                     "Download"
-                    , {
+                    , [{
                         "Origin View" : "ConnectedDirectoryModel",
                         "Item Name" : ItemName, 
                         "Item Type" : ItemType, 
                         "Item Date" : ItemDate
-                    })
+                    }])
             elif MenuItemExecuted == RenameAction:
                 self.ConnectedMachineDirectoryTree.edit(ItemSelectedIndex.siblingAtColumn(0))   
             elif MenuItemExecuted == DeleteAction:
@@ -583,7 +612,7 @@ class SSHClientMainWindow(QMainWindow):
     def ServerQueryResults(self, params):
         try:
             if not self.IncludesErrors(params):   
-                self.SSHObject, self.SFTPObject, ServerPath, ShowHidden, DirectoryItemsList = params["SSH Object"], params["SFTP Object"], params["Server Path"], params["Hidden Toggle"], params["Directory Items"]
+                ServerPath, ShowHidden, DirectoryItemsList = params["Server Path"], params["Hidden Toggle"], params["Directory Items"]
                 self.ConnectedDirectoryModel.clear() 
                 self.ConnectedDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
                 for DirectoryItem in DirectoryItemsList:
@@ -599,6 +628,36 @@ class SSHClientMainWindow(QMainWindow):
                 self.ConnectedMachineDirectoryTree.resizeColumnToContents(0)
                 self.ConnectedDirEdit.setText(ServerPath)
                 self.ConnectedDirUpOne.setEnabled(self.ConnectedDirEdit.text() != '/')
+            else:
+                raise params["Error Thrown"]
+        except Exception as E:
+            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
+
+    @pyqtSlot(object)
+    def ServerFileRenamingResults(self, params):
+        try:
+            if not self.IncludesErrors(params):
+                logging.info(f"Server file successfully renamed '{params["Old Name"]}' → '{params["New Name"]}'")
+            else:
+                raise params["Error Thrown"]
+        except Exception as E:
+            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
+
+    @pyqtSlot(object)
+    def ServerFileorDirectoryDeleteResults(self, params):
+        try:
+            if not self.IncludesErrors(params):
+                logging.info(f"Server {params["Type"]} successfully deleted: '{params["Path"]}'")
+            else:
+                raise params["Error Thrown"]
+        except Exception as E:
+            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
+
+    @pyqtSlot(object)
+    def ServerFileorDirectoryDeleteCompleted(self, params):
+        try:
+            if not self.IncludesErrors(params):
+                self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()) 
             else:
                 raise params["Error Thrown"]
         except Exception as E:

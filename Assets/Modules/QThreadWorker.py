@@ -4,6 +4,7 @@ import datetime, stat, os
 class QThreadWorker(QObject):
     transferStarted = pyqtSignal(object)
     transferProgress = pyqtSignal(object)
+    deleteCompleted = pyqtSignal(object)
     completeDataSignal = pyqtSignal(object)
     completeFunctionSignal = pyqtSignal()
 
@@ -27,8 +28,6 @@ class QThreadWorker(QObject):
                 })
         except Exception as e:
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Error Thrown" : e
             })
         self.completeFunctionSignal.emit()
@@ -46,8 +45,6 @@ class QThreadWorker(QObject):
                 })
         except Exception as e:
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Error Thrown" : e
             })
         self.completeFunctionSignal.emit()
@@ -59,8 +56,6 @@ class QThreadWorker(QObject):
                 return stdin, stdout, stderr
         except Exception as e: 
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Error Thrown" : e
             })
         self.completeFunctionSignal.emit()
@@ -74,16 +69,12 @@ class QThreadWorker(QObject):
                 raise QueryResults
             else:
                 self.completeDataSignal.emit({
-                    "SSH Object" : self.SSHObject, 
-                    "SFTP Object" : self.SFTPObject,
                     "Server Path" : ServerPath, 
                     "Hidden Toggle" : HiddenToggle, 
                     "Directory Items" : QueryResults
                 })
         except Exception as e: 
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Error Thrown" : e
             })
         self.completeFunctionSignal.emit()
@@ -148,32 +139,45 @@ class QThreadWorker(QObject):
             
     def RenameFileOrDirectory(self):
         try:
-            ServerPath = self.MiscParameters["Server Path"]
             self.SFTPObject.rename(self.MiscParameters["Old Name"], self.MiscParameters["New Name"])
+            self.completeDataSignal.emit({
+                "Old Name" : self.MiscParameters["Old Name"],
+                "New Name" : self.MiscParameters["New Name"]
+            })        
         except Exception as e: 
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Error Thrown" : e
             })
         self.completeFunctionSignal.emit()
 
-    def CreateFileOrDirectory(self):
+    def DeleteFileOrDirectoryServerRequest(self):
         try:
             ServerPath = self.MiscParameters["Server Path"]
-            Type = self.MiscParameters["Type"]
-            if Type == "Folder":
-                sftp.mkdir(ServerPath)
-            elif Type == "File":
-                with self.SFTPObject.open(ServerPath, "w") as ServerFile: 
-                    ServerFile.Write("")
+            self.DeleteFileOrDirectory(ServerPath)
+            self.completeDataSignal.emit({
+                "Server Path" : ServerPath
+            })
         except Exception as e: 
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Error Thrown" : e
             })
         self.completeFunctionSignal.emit()
+
+    def DeleteFileOrDirectory(self, Path):
+        if self.ReturnRemoteDirectory(Path):
+            for PathItem in self.SFTPObject.listdir(Path):
+                self.DeleteFileOrDirectory(os.path.join(Path, PathItem)) 
+            self.SFTPObject.rmdir(Path)
+            self.deleteCompleted.emit({
+                "Type" : "folder",
+                "Path" : Path
+            })
+        else:
+            self.SFTPObject.remove(Path)       
+            self.deleteCompleted.emit({
+                "Type" : "file",
+                "Path" : Path
+            })
 
     def TransferFilesServerRequest(self):     
         try:
@@ -183,14 +187,10 @@ class QThreadWorker(QObject):
             TypeOfTrasfer = self.MiscParameters["Transfer Type"]
             self.TransferFiles(TransferItems, LocalViewPath, ServerViewPath, TypeOfTrasfer)
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Transfer Type" : TypeOfTrasfer
             })        
         except Exception as e: 
             self.completeDataSignal.emit({
-                "SSH Object" : self.SSHObject, 
-                "SFTP Object" : self.SFTPObject,
                 "Error Thrown" : e
             })
         self.completeFunctionSignal.emit()

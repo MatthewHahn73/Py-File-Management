@@ -4,9 +4,9 @@ import datetime, stat, os
 class QThreadWorker(QObject):
     transferStarted = pyqtSignal(object)
     transferProgress = pyqtSignal(object)
+    serverMessage = pyqtSignal(object)
     deleteCompleted = pyqtSignal(object)
     completeDataSignal = pyqtSignal(object)
-    completeFunctionSignal = pyqtSignal()
 
     def __init__(self, SSHObj = None, SFTPObj = None, Conn = None, Misc = None):
         super().__init__()
@@ -18,19 +18,28 @@ class QThreadWorker(QObject):
     def ConnectAndOpenSFTP(self):
         try:
             self.SSHObject.connect(self.ConnectionParameters["Host"], self.ConnectionParameters["Port"], self.ConnectionParameters["Username"], self.ConnectionParameters["Password"])
-            if self.SSHObject.get_transport().is_active():
+            SSHTransport = self.SSHObject.get_transport()
+            if (SSHTransport is not None and SSHTransport.is_active()):
                 self.SFTPObject = self.SSHObject.open_sftp()
-                stdin, stdout, stderr = self.ReturnBasicCommandLineResults()   #Attempt to fetch the home directory path
-                self.completeDataSignal.emit({
-                    "SSH Object" : self.SSHObject, 
-                    "SFTP Object" : self.SFTPObject,
-                    "Command Line Output" : [stdin, stdout, stderr]
-                })
+                stdin, stdout, stderr = self.SSHObject.exec_command("pwd")   #Attempt to fetch the default ssh directory path
+                ServerErrorOuput = stderr.read().decode().strip()
+                if not ServerErrorOuput:
+                    RemoteDefaultDirectory = stdout.read().decode().strip()
+                    QueryResults = self.QueryServerForADirectoriesContentsRemote(RemoteDefaultDirectory)
+                    self.completeDataSignal.emit({
+                        "SSH Object" : self.SSHObject, 
+                        "SFTP Object" : self.SFTPObject,
+                        "Server Path" : RemoteDefaultDirectory, 
+                        "Directory Items" : QueryResults
+                    })
+                else: 
+                    raise Exception(ServerErrorOuput)
+            else:
+                raise Exception(f"Unable to connect to {self.ConnectionParameters["Host"]} on port {self.ConnectionParameters["Port"]}")
         except Exception as e:
             self.completeDataSignal.emit({
                 "Error Thrown" : e
             })
-        self.completeFunctionSignal.emit()
 
     def DisconnectAndCloseSFTP(self):
         try:
@@ -38,84 +47,33 @@ class QThreadWorker(QObject):
                 self.SFTPObject.close()
             self.SSHObject.close()
             SSHTransport = self.SSHObject.get_transport()
-            if SSHTransport is None or not SSHTransport.is_active():
+            if (SSHTransport is None or not SSHTransport.is_active()):
                 self.completeDataSignal.emit({
                     "SSH Object" : self.SSHObject, 
                     "SFTP Object" : self.SFTPObject,
                 })
+            else:
+                raise Exception(f"Unable to safely disconnect from the server")
         except Exception as e:
             self.completeDataSignal.emit({
                 "Error Thrown" : e
             })
-        self.completeFunctionSignal.emit()
-
-    def ReturnBasicCommandLineResults(self):
-        try:
-            if self.SSHObject.get_transport().is_active():
-                stdin, stdout, stderr = self.SSHObject.exec_command(self.MiscParameters["Command"])
-                return stdin, stdout, stderr
-        except Exception as e: 
-            self.completeDataSignal.emit({
-                "Error Thrown" : e
-            })
-        self.completeFunctionSignal.emit()
-
-    def QueryDirectoriesContentsServerRequest(self):
-        try:
-            ServerPath = self.MiscParameters["Server Path"]
-            HiddenToggle = self.MiscParameters["Hidden Toggle"]
-            QueryResults = self.QueryServerForADirectoriesContentsRemote(ServerPath)
-            if (type(QueryResults) == Exception):
-                raise QueryResults
-            else:
-                self.completeDataSignal.emit({
-                    "Server Path" : ServerPath, 
-                    "Hidden Toggle" : HiddenToggle, 
-                    "Directory Items" : QueryResults
-                })
-        except Exception as e: 
-            self.completeDataSignal.emit({
-                "Error Thrown" : e
-            })
-        self.completeFunctionSignal.emit()
-
-    def QueryServerForADirectoriesContentsRemote(self, ServerPath):
-        PathAttributes = self.SFTPObject.lstat(ServerPath)
-        if stat.S_ISREG(PathAttributes.st_mode):
-            return Exception(f"Cannot navigate to '{ServerPath}'. It is a file")
-        else:
-            DirectoryItemList = []
-            for Item in self.SFTPObject.listdir_attr(ServerPath): 
-                ItemType = ""
-                if stat.S_ISREG(Item.st_mode):
-                    ItemType = "File"
-                elif stat.S_ISDIR(Item.st_mode) or stat.S_ISLNK(Item.st_mode):
-                    ItemType = "Folder"
-                DirectoryItemList.append({
-                    "Item Name" : Item.filename, 
-                    "Item Type" : ItemType,
-                    "Item Date" : str(datetime.datetime.fromtimestamp(Item.st_mtime).strftime('%Y-%m-%d %I:%M %p'))
-                })
-            return DirectoryItemList
 
     def QueryDirectoriesContentsLocalRequest(self):
         try:
             LocalPath = self.MiscParameters["Local Path"]
-            HiddenToggle = self.MiscParameters["Hidden Toggle"]
             QueryResults = self.QueryServerForADirectoriesContentsLocal(LocalPath)
-            if (type(QueryResults) == Exception):
-                raise QueryResults
-            else:
+            if (type(QueryResults) == list):
                 self.completeDataSignal.emit({
                     "Local Path" : LocalPath, 
-                    "Hidden Toggle" : HiddenToggle, 
                     "Directory Items" : QueryResults
                 })
+            else:
+                raise QueryResults
         except Exception as e: 
             self.completeDataSignal.emit({
                 "Error Thrown" : e
             })
-        self.completeFunctionSignal.emit()
 
     def QueryServerForADirectoriesContentsLocal(self, LocalPath):
         if not os.path.isdir(LocalPath):
@@ -136,6 +94,41 @@ class QThreadWorker(QObject):
                         "Item Date" : str(datetime.datetime.fromtimestamp(os.stat(DirectoryItemPath).st_mtime).strftime('%Y-%m-%d %I:%M %p'))
                     })
             return DirectoryItemList
+
+    def QueryDirectoriesContentsServerRequest(self):
+        try:
+            ServerPath = self.MiscParameters["Server Path"]
+            QueryResults = self.QueryServerForADirectoriesContentsRemote(ServerPath)
+            if (type(QueryResults) == list):
+                self.completeDataSignal.emit({
+                    "Server Path" : ServerPath, 
+                    "Directory Items" : QueryResults
+                })
+            else:
+                raise QueryResults
+        except Exception as e: 
+            self.completeDataSignal.emit({
+                "Error Thrown" : e
+            })
+
+    def QueryServerForADirectoriesContentsRemote(self, ServerPath):
+        PathAttributes = self.SFTPObject.lstat(ServerPath)
+        if stat.S_ISREG(PathAttributes.st_mode):
+            return Exception(f"Cannot navigate to '{ServerPath}'. It is a file")
+        else:
+            DirectoryItemList = []
+            for Item in self.SFTPObject.listdir_attr(ServerPath): 
+                ItemType = ""
+                if stat.S_ISREG(Item.st_mode):
+                    ItemType = "File"
+                elif stat.S_ISDIR(Item.st_mode) or stat.S_ISLNK(Item.st_mode):
+                    ItemType = "Folder"
+                DirectoryItemList.append({
+                    "Item Name" : Item.filename, 
+                    "Item Type" : ItemType,
+                    "Item Date" : str(datetime.datetime.fromtimestamp(Item.st_mtime).strftime('%Y-%m-%d %I:%M %p'))
+                })
+            return DirectoryItemList
             
     def RenameFileOrDirectory(self):
         try:
@@ -148,35 +141,34 @@ class QThreadWorker(QObject):
             self.completeDataSignal.emit({
                 "Error Thrown" : e
             })
-        self.completeFunctionSignal.emit()
 
     def DeleteFileOrDirectoryServerRequest(self):
         try:
             ServerPath = self.MiscParameters["Server Path"]
-            self.DeleteFileOrDirectory(ServerPath)
+            ItemOrPath = self.MiscParameters["Item or Path"]
+            self.DeleteFileOrDirectory(ItemOrPath)
+            QueryResultsRemote = self.QueryServerForADirectoriesContentsRemote(ServerPath)
             self.completeDataSignal.emit({
-                "Server Path" : ServerPath
+                "Server Path" : ServerPath, 
+                "Server Results" : QueryResultsRemote
             })
         except Exception as e: 
             self.completeDataSignal.emit({
                 "Error Thrown" : e
             })
-        self.completeFunctionSignal.emit()
 
     def DeleteFileOrDirectory(self, Path):
         if self.ReturnRemoteDirectory(Path):
             for PathItem in self.SFTPObject.listdir(Path):
                 self.DeleteFileOrDirectory(os.path.join(Path, PathItem)) 
             self.SFTPObject.rmdir(Path)
-            self.deleteCompleted.emit({
-                "Type" : "folder",
-                "Path" : Path
+            self.serverMessage.emit({
+                "Message" : f"Server directory successfully deleted at: '{Path}'"
             })
         else:
             self.SFTPObject.remove(Path)       
-            self.deleteCompleted.emit({
-                "Type" : "file",
-                "Path" : Path
+            self.serverMessage.emit({
+                "Message" : f"Server file successfully deleted at: '{Path}'"
             })
 
     def TransferFilesServerRequest(self):     
@@ -186,14 +178,18 @@ class QThreadWorker(QObject):
             ServerViewPath = self.MiscParameters["Server Path"]
             TypeOfTrasfer = self.MiscParameters["Transfer Type"]
             self.TransferFiles(TransferItems, LocalViewPath, ServerViewPath, TypeOfTrasfer)
+            QueryResultsLocal = self.QueryServerForADirectoriesContentsLocal(LocalViewPath)
+            QueryResultsRemote = self.QueryServerForADirectoriesContentsRemote(ServerViewPath)
             self.completeDataSignal.emit({
-                "Transfer Type" : TypeOfTrasfer
+                "Local Path" : LocalViewPath,
+                "Local Results" : QueryResultsLocal, 
+                "Server Path" : ServerViewPath,
+                "Server Results" : QueryResultsRemote
             })        
         except Exception as e: 
             self.completeDataSignal.emit({
                 "Error Thrown" : e
             })
-        self.completeFunctionSignal.emit()
 
     def TransferFiles(self, TransferItems, LocalViewPath, ServerViewPath, TypeOfTransfer):             
         for Item in TransferItems:
@@ -204,6 +200,9 @@ class QThreadWorker(QObject):
                     NextFolderServer = f"{ServerViewPath}/{Item["Item Name"]}"
                     if not os.path.exists(NextFolderLocal):
                         os.mkdir(NextFolderLocal)
+                        self.serverMessage.emit({
+                            "Message" : f"Local folder sucessfully created at '{NextFolderLocal}'"
+                        })
                     QueryResults = self.QueryServerForADirectoriesContentsRemote(NextFolderServer)
                     self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
                 elif TypeOfTransfer == "Upload":
@@ -212,6 +211,9 @@ class QThreadWorker(QObject):
                     NextPathItems = os.listdir()
                     if not self.ReturnRemoteDirectory(NextFolderServer):
                         self.SFTPObject.mkdir(NextFolderServer)
+                        self.serverMessage.emit({
+                            "Message" : f"Server folder sucessfully created at '{NextFolderServer}'"
+                        })
                     QueryResults = self.QueryServerForADirectoriesContentsLocal(NextFolderLocal)
                     self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
             #Base case - Fetches or uploads file in the list

@@ -157,7 +157,7 @@ class SSHClientMainWindow(QMainWindow):
         self.StatusBarProgressBar.hide()
 
         #Set menu item triggers
-        self.actionClose.triggered.connect(lambda: self.close())
+        self.actionClose.triggered.connect(self.close)
         self.actionDisconnect.triggered.connect(self.ExecuteDisconnectButton)
         self.actionShow_Password.triggered.connect(self.TogglePasswords)
         self.actionError.triggered.connect(lambda: self.ToggleLoggingLevel("Error"))
@@ -171,12 +171,12 @@ class SSHClientMainWindow(QMainWindow):
         self.CurrentDirUpOne.clicked.connect(self.ExecuteCurrentNavigateOneUpButton)
         self.ConnectedHiddenToggleCheckbox.clicked.connect(self.ExecuteShowConnectedHiddenFilesButton)
         self.ConnectedDirUpOne.clicked.connect(self.ExecuteConnectedNavigateOneUpButton)
-        self.CurrentRefresh.clicked.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()))
-        self.ConnectedRefresh.clicked.connect(lambda: self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()))
+        self.CurrentRefresh.clicked.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()))
+        self.ConnectedRefresh.clicked.connect(lambda: self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text()))
 
         #Set the TextEdit triggers
-        self.CurrentDirEdit.editingFinished.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()))
-        self.ConnectedDirEdit.editingFinished.connect(lambda: self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()))
+        self.CurrentDirEdit.editingFinished.connect(lambda: self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()))
+        self.ConnectedDirEdit.editingFinished.connect(lambda: self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text()))
 
         #Set the tree triggers
         self.CurrentMachineDirectoryTree.doubleClicked.connect(self.CurrentItemDoubleClicked)
@@ -199,65 +199,10 @@ class SSHClientMainWindow(QMainWindow):
 
         #Load home directory
         self.CurrentDirEdit.setText(QDir.homePath())
-        self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked())
+        self.LoadGivenLocalDirectory(self.CurrentDirEdit.text())
 
-    def LoadGivenLocalDirectory(self, Path, ShowHidden):
-        self.PThread = QThread(self) 
-        self.PWorker = ThreadWorkerObject.QThreadWorker (
-                Misc = {
-                    "Local Path": Path, 
-                    "Hidden Toggle": ShowHidden
-                }
-            )
-        self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.QueryDirectoriesContentsLocalRequest)    
-        self.PWorker.completeDataSignal.connect(self.LocalQueryResults)
-        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
-        self.PThread.start()
-        
-    def LoadGivenRemoteDirectory(self, Path, ShowHidden):
-        SSHTransport = self.SSHObject.get_transport()
-        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
-            self.PThread = QThread(self) 
-            self.PWorker = ThreadWorkerObject.QThreadWorker (
-                    SSHObj = self.SSHObject
-                    , SFTPObj = self.SFTPObject
-                    , Misc = {
-                        "Server Path": Path, 
-                        "Hidden Toggle": ShowHidden
-                    }
-                )
-            self.PWorker.moveToThread(self.PThread)
-            self.PThread.started.connect(self.PWorker.QueryDirectoriesContentsServerRequest)    
-            self.PWorker.completeDataSignal.connect(self.ServerQueryResults)
-            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
-            self.PThread.start()
-        else:
-            logging.warning(f"Cannot fetch the remote directory without an active SSH connection")
-
-    def ExecuteTransferringFiles(self, Type, TransferData):
-        SSHTransport = self.SSHObject.get_transport()
-        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
-            self.PThread = QThread(self) 
-            self.PWorker = ThreadWorkerObject.QThreadWorker (
-                    SSHObj = self.SSHObject
-                    , SFTPObj = self.SFTPObject
-                    , Misc = {
-                        "Transfer Type" : Type, 
-                        "Transfer Data": TransferData,
-                        "Local Path": self.CurrentDirEdit.text(),
-                        "Server Path": self.ConnectedDirEdit.text(), 
-                    }
-                )
-            self.PWorker.moveToThread(self.PThread)
-            self.PThread.started.connect(self.PWorker.TransferFilesServerRequest)  
-            self.PWorker.transferStarted.connect(self.FileTransferStarted)
-            self.PWorker.transferProgress.connect(self.FileTransferProgress)
-            self.PWorker.completeDataSignal.connect(self.FileTransferResults)
-            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
-            self.PThread.start()
-        else:
-            logging.warning(f"Cannot transfer files without an active SFTP connection")
+        #Set application icon 
+        self.setWindowIcon(QIcon("Assets/Icons/Padlock_Icon.ico"))
 
     def ExecuteConnectButton(self):
         self.UpdateStatusLabel("Disconnected", "white")
@@ -270,14 +215,10 @@ class SSHClientMainWindow(QMainWindow):
                     "Username": self.B_UsernameEdit.text(), 
                     "Password": self.B_PasswordEdit.text()
                 }
-                , Misc = {
-                    "Command": "pwd", 
-                }
             )
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.ConnectAndOpenSFTP)    
         self.PWorker.completeDataSignal.connect(self.ConnectionToServerResults)
-        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
     def ExecuteDisconnectButton(self):
@@ -288,55 +229,122 @@ class SSHClientMainWindow(QMainWindow):
         self.PWorker.moveToThread(self.PThread)
         self.PThread.started.connect(self.PWorker.DisconnectAndCloseSFTP)    
         self.PWorker.completeDataSignal.connect(self.DisconnectionToServerResults)
-        self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
         self.PThread.start()
 
-    def RenameRemoteFile(self, Index, Role, OldValue, NewValue):
-        SSHTransport = self.SSHObject.get_transport()
-        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+    def LoadGivenLocalDirectory(self, Path):
+        if not self.PThread.isRunning():
             self.PThread = QThread(self) 
             self.PWorker = ThreadWorkerObject.QThreadWorker (
-                    SSHObj = self.SSHObject
-                    , SFTPObj = self.SFTPObject
-                    , Misc = {
-                        "Old Name": os.path.join(self.ConnectedDirEdit.text(), OldValue), 
-                        "New Name": os.path.join(self.ConnectedDirEdit.text(), NewValue)
+                    Misc = {
+                        "Local Path": Path, 
                     }
                 )
             self.PWorker.moveToThread(self.PThread)
-            self.PThread.started.connect(self.PWorker.RenameFileOrDirectory)  
-            self.PWorker.completeDataSignal.connect(self.ServerFileRenamingResults)
-            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
+            self.PThread.started.connect(self.PWorker.QueryDirectoriesContentsLocalRequest)    
+            self.PWorker.completeDataSignal.connect(self.LocalQueryResults)
             self.PThread.start()
         else:
-            logging.warning(f"Cannot rename server files without an active SFTP connection")
+            logging.warning("Cannot query for the local directory while the secondary thread is in use")
+        
+    def LoadGivenRemoteDirectory(self, Path):
+        if not self.PThread.isRunning():
+            SSHTransport = self.SSHObject.get_transport()
+            if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+                self.PThread = QThread(self) 
+                self.PWorker = ThreadWorkerObject.QThreadWorker (
+                        SSHObj = self.SSHObject
+                        , SFTPObj = self.SFTPObject
+                        , Misc = {
+                            "Server Path": Path, 
+                        }
+                    )
+                self.PWorker.moveToThread(self.PThread)
+                self.PThread.started.connect(self.PWorker.QueryDirectoriesContentsServerRequest)    
+                self.PWorker.completeDataSignal.connect(self.ServerQueryResults)
+                self.PThread.start()
+            else:
+                logging.warning("Cannot fetch the remote directory without an active SSH connection")
+        else:
+            logging.warning("Cannot query for the remote directory while the secondary thread is in use")
 
-    def DeleteRemoteFiles(self, Path):
-        SSHTransport = self.SSHObject.get_transport()
-        if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
-            self.PThread = QThread(self) 
-            self.PWorker = ThreadWorkerObject.QThreadWorker (
-                    SSHObj = self.SSHObject
-                    , SFTPObj = self.SFTPObject
-                    , Misc = {
-                        "Server Path": Path
-                    }
-                )
-            self.PWorker.moveToThread(self.PThread)
-            self.PThread.started.connect(self.PWorker.DeleteFileOrDirectoryServerRequest)              
-            self.PWorker.deleteCompleted.connect(self.ServerFileorDirectoryDeleteResults)
-            self.PWorker.completeDataSignal.connect(self.ServerFileorDirectoryDeleteCompleted)
-            self.PWorker.completeFunctionSignal.connect(self.PThread.quit)
-            self.PThread.start()
+    def ExecuteTransferringFiles(self, Type, TransferData):
+        if not self.PThread.isRunning():
+            SSHTransport = self.SSHObject.get_transport()
+            if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+                self.PThread = QThread(self) 
+                self.PWorker = ThreadWorkerObject.QThreadWorker (
+                        SSHObj = self.SSHObject
+                        , SFTPObj = self.SFTPObject
+                        , Misc = {
+                            "Transfer Type" : Type, 
+                            "Transfer Data": TransferData,
+                            "Local Path": self.CurrentDirEdit.text(),
+                            "Server Path": self.ConnectedDirEdit.text(), 
+                        }
+                    )
+                self.PWorker.moveToThread(self.PThread)
+                self.PThread.started.connect(self.PWorker.TransferFilesServerRequest)  
+                self.PWorker.serverMessage.connect(self.ServerUpdateMessage)
+                self.PWorker.transferStarted.connect(self.FileTransferStarted)
+                self.PWorker.transferProgress.connect(self.FileTransferProgress)
+                self.PWorker.completeDataSignal.connect(self.FileTransferResults)
+                self.PThread.start()
+            else:
+                logging.warning("Cannot transfer files without an active SFTP connection")
         else:
-            logging.warning(f"Cannot delete server files without an active SFTP connection")
-            
+            logging.warning("Cannot transfer files while the secondary thread is in use")
+
+    def RenameRemoteFile(self, Index, Role, OldValue, NewValue):
+        if not self.PThread.isRunning():
+            SSHTransport = self.SSHObject.get_transport()
+            if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+                self.PThread = QThread(self) 
+                self.PWorker = ThreadWorkerObject.QThreadWorker (
+                        SSHObj = self.SSHObject
+                        , SFTPObj = self.SFTPObject
+                        , Misc = {
+                            "Old Name": os.path.join(self.ConnectedDirEdit.text(), OldValue), 
+                            "New Name": os.path.join(self.ConnectedDirEdit.text(), NewValue)
+                        }
+                    )
+                self.PWorker.moveToThread(self.PThread)
+                self.PThread.started.connect(self.PWorker.RenameFileOrDirectory)  
+                self.PWorker.completeDataSignal.connect(self.ServerFileRenamingCompleted)
+                self.PThread.start()
+            else:
+                logging.warning("Cannot rename server files without an active SFTP connection")
+        else:
+            logging.warning("Cannot rename files on the server while the secondary thread is in use")
+
+    def DeleteRemoteFiles(self, ItemOrPath):
+        if not self.PThread.isRunning():
+            SSHTransport = self.SSHObject.get_transport()
+            if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
+                self.PThread = QThread(self) 
+                self.PWorker = ThreadWorkerObject.QThreadWorker (
+                        SSHObj = self.SSHObject
+                        , SFTPObj = self.SFTPObject
+                        , Misc = {
+                            "Server Path": self.ConnectedDirEdit.text(),
+                            "Item or Path" : ItemOrPath
+                        }
+                    )
+                self.PWorker.moveToThread(self.PThread)
+                self.PThread.started.connect(self.PWorker.DeleteFileOrDirectoryServerRequest)              
+                self.PWorker.serverMessage.connect(self.ServerUpdateMessage)
+                self.PWorker.completeDataSignal.connect(self.ServerFileorDirectoryDeleteCompleted)
+                self.PThread.start()
+            else:
+                logging.warning("Cannot delete server files without an active SFTP connection")
+        else:
+            logging.warning("Cannot delete files on the server while the secondary thread is in use")
+
     def RenameLocalFile(self, Index, Role, OldValue, NewValue):
         if NewValue.strip() != OldValue.strip():
             OldPath = os.path.join(self.CurrentDirEdit.text(), OldValue)
             NewPath = os.path.join(self.CurrentDirEdit.text(), NewValue)
             os.rename(OldPath, NewPath)
-            self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()) 
+            self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()) 
             logging.info(f"Local file successfully renamed '{OldPath}' → '{NewPath}'")
 
     def DeleteLocalFiles(self, Path):
@@ -349,26 +357,28 @@ class SSHClientMainWindow(QMainWindow):
             os.remove(Path)
             logging.info(f"Local file successfully deleted '{Path}'")
 
-    def ExecuteShowCurrentHiddenFilesButton(self, Checked):
+    def ExecuteShowCurrentHiddenFilesButton(self):
+        Checked = self.CurrentHiddenToggleCheckbox.isChecked()
         CurrentDir = QDir.currentPath()
         ChangedIconPath = f"{CurrentDir}/Assets/Icons/view-visible.svg" if Checked else f"{CurrentDir}/Assets/Icons/view-hidden.svg"
         self.CurrentHiddenToggleCheckbox.setIcon(QIcon(ChangedIconPath))
-        self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), Checked) 
+        self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()) 
 
-    def ExecuteShowConnectedHiddenFilesButton(self, Checked):
+    def ExecuteShowConnectedHiddenFilesButton(self):
+        Checked = self.ConnectedHiddenToggleCheckbox.isChecked()
         ConnectedDir = QDir.currentPath()
         ChangedIconPath = f"{ConnectedDir}/Assets/Icons/view-visible.svg" if Checked else f"{ConnectedDir}/Assets/Icons/view-hidden.svg"
         self.ConnectedHiddenToggleCheckbox.setIcon(QIcon(ChangedIconPath))
-        self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), Checked) 
+        self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text()) 
 
     def ExecuteCurrentNavigateOneUpButton(self): 
         OneDirectoryUp = os.path.dirname(self.CurrentDirEdit.text())
         if os.path.isdir(OneDirectoryUp):
-            self.LoadGivenLocalDirectory(OneDirectoryUp, self.CurrentHiddenToggleCheckbox.isChecked()) 
+            self.LoadGivenLocalDirectory(OneDirectoryUp) 
 
     def ExecuteConnectedNavigateOneUpButton(self):
         OneDirectoryUp = os.path.dirname(self.ConnectedDirEdit.text())
-        self.LoadGivenRemoteDirectory(OneDirectoryUp, self.ConnectedHiddenToggleCheckbox.isChecked()) 
+        self.LoadGivenRemoteDirectory(OneDirectoryUp) 
 
     def CurrentItemDoubleClicked(self, index):
         if index.isValid():
@@ -376,14 +386,14 @@ class SSHClientMainWindow(QMainWindow):
             ItemName = PathIndex.data()
             FullPath = os.path.join(self.CurrentDirEdit.text(), ItemName)
             if os.path.exists(FullPath):
-                self.LoadGivenLocalDirectory(FullPath, self.CurrentHiddenToggleCheckbox.isChecked())
+                self.LoadGivenLocalDirectory(FullPath)
         
     def ConnectedItemDoubleClicked(self, index):
         if index.isValid():
             PathIndex = index.sibling(index.row(), 0)
             ItemName = PathIndex.data()
             FullPath = os.path.join(self.ConnectedDirEdit.text(), ItemName)
-            self.LoadGivenRemoteDirectory(FullPath, self.ConnectedHiddenToggleCheckbox.isChecked())
+            self.LoadGivenRemoteDirectory(FullPath)
 
     def CurrentContextMenuGenerated(self, position):
         ItemSelectedIndex = self.CurrentMachineDirectoryTree.indexAt(position) 
@@ -419,7 +429,7 @@ class SSHClientMainWindow(QMainWindow):
                 self.CurrentMachineDirectoryTree.edit(ItemSelectedIndex.siblingAtColumn(0)) 
             elif MenuItemExecuted == DeleteAction:
                 self.DeleteLocalFiles(os.path.join(self.CurrentDirEdit.text(), ItemName))
-                self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked()) 
+                self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()) 
                 
     def ConnectedContextMenuGenerated(self, position):
         ItemSelectedIndex = self.ConnectedMachineDirectoryTree.indexAt(position) 
@@ -548,6 +558,8 @@ class SSHClientMainWindow(QMainWindow):
     @pyqtSlot(object)
     def ConnectionToServerResults(self, params):
         try:
+            if self.PThread.isRunning():
+                self.PThread.quit()
             if not self.IncludesErrors(params):   
                 self.SSHObject, self.SFTPObject = params["SSH Object"], params["SFTP Object"]
                 SSHTransport = self.SSHObject.get_transport()
@@ -556,14 +568,10 @@ class SSHClientMainWindow(QMainWindow):
                     TransportInfo = self.SSHObject.get_transport().getpeername()
                     self.UpdateStatusLabel(f"Connected to {TransportInfo[0]}:{TransportInfo[1]}", "#2bfb75")
                     logging.info(f"SSH connection successful to {TransportInfo[0]} on port {TransportInfo[1]}")
-
-                    stdin, stdout, stderr = params["Command Line Output"]
-                    ServerErrorOuput = stderr.read().decode().strip()
-                    if not ServerErrorOuput:
-                        RemoteHomeDirectory = stdout.read().decode().strip()
-                        self.LoadGivenRemoteDirectory(RemoteHomeDirectory, self.ConnectedHiddenToggleCheckbox.isChecked())
-                    else:
-                        raise Exception(ServerErrorOuput)
+                    self.ServerQueryResults({
+                        "Server Path" : params["Server Path"], 
+                        "Directory Items" : params["Directory Items"]
+                    })
                 else:
                     raise Exception("SSH/SFTP connection could not be estasblished")
             else:
@@ -574,6 +582,8 @@ class SSHClientMainWindow(QMainWindow):
     @pyqtSlot(object)
     def DisconnectionToServerResults(self, params):
         try:
+            if self.PThread.isRunning():
+                self.PThread.quit()
             if not self.IncludesErrors(params):   
                 self.SSHObject = params["SSH Object"]
                 SSHTransport = self.SSHObject.get_transport()
@@ -591,14 +601,16 @@ class SSHClientMainWindow(QMainWindow):
     @pyqtSlot(object)
     def LocalQueryResults(self, params):
         try:
+            if self.PThread.isRunning():
+                self.PThread.quit()
             if not self.IncludesErrors(params):   
-                LocalPath, ShowHidden, DirectoryItemsList = params["Local Path"], params["Hidden Toggle"], params["Directory Items"]
+                ShowHidden, LocalPath, DirectoryItemsList = self.CurrentHiddenToggleCheckbox.isChecked(), params["Local Path"], params["Directory Items"]
                 self.CurrentDirectoryModel.clear() 
                 self.CurrentDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
                 for DirectoryItem in DirectoryItemsList:
                     DirectoryItemPath = os.path.join(LocalPath, DirectoryItem["Item Name"])
                     IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
-                    if (not IsHiddenItem) or (IsHiddenItem and ShowHidden):
+                    if (not IsHiddenItem) or (IsHiddenItem and self.CurrentHiddenToggleCheckbox.isChecked()):
                         ItemName, ItemType, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Date"]
                         if ItemName != None:
                             DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
@@ -616,8 +628,10 @@ class SSHClientMainWindow(QMainWindow):
     @pyqtSlot(object)
     def ServerQueryResults(self, params):
         try:
+            if self.PThread.isRunning():
+                self.PThread.quit()
             if not self.IncludesErrors(params):   
-                ServerPath, ShowHidden, DirectoryItemsList = params["Server Path"], params["Hidden Toggle"], params["Directory Items"]
+                ShowHidden, ServerPath, DirectoryItemsList = self.ConnectedHiddenToggleCheckbox.isChecked(), params["Server Path"], params["Directory Items"]
                 self.ConnectedDirectoryModel.clear() 
                 self.ConnectedDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
                 for DirectoryItem in DirectoryItemsList:
@@ -639,8 +653,10 @@ class SSHClientMainWindow(QMainWindow):
             logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
     @pyqtSlot(object)
-    def ServerFileRenamingResults(self, params):
+    def ServerFileRenamingCompleted(self, params):
         try:
+            if self.PThread.isRunning():
+                self.PThread.quit()
             if not self.IncludesErrors(params):
                 logging.info(f"Server file successfully renamed '{params["Old Name"]}' → '{params["New Name"]}'")
             else:
@@ -649,20 +665,25 @@ class SSHClientMainWindow(QMainWindow):
             logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
     @pyqtSlot(object)
-    def ServerFileorDirectoryDeleteResults(self, params):
+    def ServerFileorDirectoryDeleteCompleted(self, params):
         try:
+            if self.PThread.isRunning():
+                self.PThread.quit()
             if not self.IncludesErrors(params):
-                logging.info(f"Server {params["Type"]} successfully deleted: '{params["Path"]}'")
+                self.ServerQueryResults({
+                    "Server Path" : params["Server Path"], 
+                    "Directory Items" : params["Server Results"]
+                })
             else:
                 raise params["Error Thrown"]
         except Exception as E:
             logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
 
     @pyqtSlot(object)
-    def ServerFileorDirectoryDeleteCompleted(self, params):
+    def ServerUpdateMessage(self, params):
         try:
             if not self.IncludesErrors(params):
-                self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()) 
+                logging.info(params["Message"])
             else:
                 raise params["Error Thrown"]
         except Exception as E:
@@ -693,13 +714,19 @@ class SSHClientMainWindow(QMainWindow):
 
     @pyqtSlot(object)
     def FileTransferResults(self, params):
-        self.StatusBarProgressBar.hide()
         try:
+            self.StatusBarProgressBar.hide()
+            if self.PThread.isRunning():
+                self.PThread.quit()
             if not self.IncludesErrors(params): 
-                if params["Transfer Type"] == "Download":
-                    self.LoadGivenLocalDirectory(self.CurrentDirEdit.text(), self.CurrentHiddenToggleCheckbox.isChecked())
-                elif params["Transfer Type"] == "Upload":
-                    self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text(), self.ConnectedHiddenToggleCheckbox.isChecked()) 
+                self.LocalQueryResults({
+                    "Local Path" : params["Local Path"], 
+                    "Directory Items" : params["Local Results"]
+                })
+                self.ServerQueryResults({
+                    "Server Path" : params["Server Path"], 
+                    "Directory Items" : params["Server Results"]
+                })
                 logging.info("Transfer complete")
             else:
                 raise params["Error Thrown"]

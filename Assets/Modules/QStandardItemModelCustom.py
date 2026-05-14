@@ -1,10 +1,11 @@
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
-from PyQt6.QtCore import Qt, QMimeData, QThread, QObject, pyqtSignal
+from PyQt6.QtCore import Qt, QMimeData, QThread, QObject, QVariant, QModelIndex, pyqtSignal
 from pathlib import Path
 import json
 
 class QStandardItemModelCustom(QStandardItemModel):
     valueAdded = pyqtSignal(object)
+    customItemChanged = pyqtSignal(QModelIndex, int, QVariant, QVariant)
     MIMEFormatType = "application/x-custom-tree-item"
 
     def __init__(self, Parent = None):
@@ -53,3 +54,9 @@ class QStandardItemModelCustom(QStandardItemModel):
         if (index.isValid and index.column() in (0, 1, 2)): # Remove dropping to any sub folders
             return default_flags & ~Qt.ItemFlag.ItemIsDropEnabled   
         return default_flags
+
+    def setData(self, index, value, role):
+        if role == Qt.ItemDataRole.EditRole or role == Qt.ItemDataRole.DisplayRole:
+            oldValue = self.data(index, role)
+            self.customItemChanged.emit(index, role, oldValue, value)
+        return super().setData(index, value, role)

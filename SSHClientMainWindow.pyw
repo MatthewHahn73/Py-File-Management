@@ -2,30 +2,20 @@
 SSH Client GUI 
 
 Authored by: Matthew Hahn
-Github: https://github.com/MatthewHahn73/Py-File-Management
+Github: https://github.com/MatthewHahn73/Py-SFTP-Client
 
 Current Bugs
-    -Progress bar in bottom left of the status bar is not aligned left sometimes
-    -If moved out of the original directory while a file transfer is ongoing, will reload the wrong directory 
-    -Doesn't update the change directory on every change during an ongoing file transfer
-        -E.g. if three files are being transfered, and one is completed, doesn't update that directory with the one file which has completed transfer
+    -Progress bar in bottom left of the status bar is not aligned left properly at certain window resolutions
     -If a directory is deleted while in that directory and the refresh button is hit, will throw inaccurate error message
-    -Attempting to navigate out of a menu while a download/upload is in progress will throw errors and corrupt the secondary thread
-        -Disable navigation features when download is in progress?
-    -Rare instance where deleting log message doesn't show up when deleting a file
-        -Only replicable on local directory
+    -Processes flow causes the directory to be updated in the directory on every file upload/download 
+        -When downloading/uploading files in sub directories causes the application to briefly navigate to those directories 
+            -Not really a bug, but kind of a confusing visual mess
+            -Fix?
 Future Features
-    -Add in the ability to delete/upload/download multiple highlighted files with context menu
-    -Incorporate a context menu for both local and remote directories
-        -This context menu should allow:
-            -Encrypting files
-                -See PyAESEncryption.py
-    -Add in a queue system that allows for the user to send multiple files over multiple directories
     -Add functionality for the 'Help' and 'Update' buttons in the menu bar
     -Add more informative information on files in both directories (type of file, size)
         -Images for folder/files?
     -Add in a confirmation prompt for deletions
-    -Add in icon for the application
     -Modify stylesheet to be more modern 
 
 Required Software
@@ -285,8 +275,9 @@ class SSHClientMainWindow(QMainWindow):
                 self.PWorker.moveToThread(self.PThread)
                 self.PThread.started.connect(self.PWorker.TransferFilesServerRequest)  
                 self.PWorker.serverMessage.connect(self.ServerUpdateMessage)
-                self.PWorker.transferStarted.connect(self.FileTransferStarted)
                 self.PWorker.transferProgress.connect(self.FileTransferProgress)
+                self.PWorker.transferCompleteLocal.connect(self.LocalQueryResults)
+                self.PWorker.transferCompleteRemote.connect(self.ServerQueryResults)
                 self.PWorker.completeDataSignal.connect(self.FileTransferResults)
                 self.PThread.start()
             else:
@@ -316,7 +307,7 @@ class SSHClientMainWindow(QMainWindow):
         else:
             logging.warning("Cannot rename files on the server while the secondary thread is in use")
 
-    def DeleteRemoteFiles(self, ItemOrPath):
+    def DeleteRemoteFiles(self, Items):
         if not self.PThread.isRunning():
             SSHTransport = self.SSHObject.get_transport()
             if (SSHTransport is not None and SSHTransport.is_active()) and not (self.SFTPObject.sock.closed):
@@ -326,7 +317,7 @@ class SSHClientMainWindow(QMainWindow):
                         , SFTPObj = self.SFTPObject
                         , Misc = {
                             "Server Path": self.ConnectedDirEdit.text(),
-                            "Item or Path" : ItemOrPath
+                            "Directory Items" : Items
                         }
                     )
                 self.PWorker.moveToThread(self.PThread)
@@ -396,12 +387,8 @@ class SSHClientMainWindow(QMainWindow):
             self.LoadGivenRemoteDirectory(FullPath)
 
     def CurrentContextMenuGenerated(self, position):
-        ItemSelectedIndex = self.CurrentMachineDirectoryTree.indexAt(position) 
-        if ItemSelectedIndex.isValid():
-            #Deselect any other selected items and select the current index item
-            self.CurrentMachineDirectoryTree.clearSelection()
-            self.CurrentMachineDirectoryTree.setCurrentIndex(ItemSelectedIndex)
-
+        AllItemSelectedIndexes = [Index for Index in self.CurrentMachineDirectoryTree.selectionModel().selectedIndexes() if Index.column() == 0]
+        if AllItemSelectedIndexes:
             #Create menu items 
             CurrentContextMenu = QMenu()
             UploadAction = CurrentContextMenu.addAction("Upload")
@@ -410,60 +397,58 @@ class SSHClientMainWindow(QMainWindow):
             DeleteAction = CurrentContextMenu.addAction("Delete")
 
             #Set menu item values to variables
+            AllItemAttributes = []
+            for Item in AllItemSelectedIndexes:
+                AllItemAttributes.append({
+                    "Origin View" : "CurrentDirectoryModel",
+                    "Item Name" : Item.siblingAtColumn(0).data(), 
+                    "Item Type" : Item.siblingAtColumn(1).data(), 
+                    "Item Date" : Item.siblingAtColumn(2).data()
+                })
+
+            RenameAction.setEnabled(len(AllItemSelectedIndexes) == 1)
             MenuItemExecuted = CurrentContextMenu.exec(self.CurrentMachineDirectoryTree.viewport().mapToGlobal(position))
-            ItemName = ItemSelectedIndex.siblingAtColumn(0).data()
-            ItemType = ItemSelectedIndex.siblingAtColumn(1).data()
-            ItemDate = ItemSelectedIndex.siblingAtColumn(2).data()
 
             #Context menu item selected logic
             if MenuItemExecuted == UploadAction:
-                self.ExecuteTransferringFiles(
-                    "Upload"
-                    , [{
-                        "Origin View" : "CurrentDirectoryModel",
-                        "Item Name" : ItemName, 
-                        "Item Type" : ItemType, 
-                        "Item Date" : ItemDate
-                    }])
+                self.ExecuteTransferringFiles("Upload", AllItemAttributes)
             elif MenuItemExecuted == RenameAction:
-                self.CurrentMachineDirectoryTree.edit(ItemSelectedIndex.siblingAtColumn(0)) 
+                self.CurrentMachineDirectoryTree.edit(AllItemSelectedIndexes[0].siblingAtColumn(0)) 
             elif MenuItemExecuted == DeleteAction:
-                self.DeleteLocalFiles(os.path.join(self.CurrentDirEdit.text(), ItemName))
+                for Item in AllItemAttributes:
+                    self.DeleteLocalFiles(os.path.join(self.CurrentDirEdit.text(), Item["Item Name"]))
                 self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()) 
                 
     def ConnectedContextMenuGenerated(self, position):
-        ItemSelectedIndex = self.ConnectedMachineDirectoryTree.indexAt(position) 
-        if ItemSelectedIndex.isValid():
-            #Deselect any other selected items and select the current index item
-            self.ConnectedMachineDirectoryTree.clearSelection()
-            self.ConnectedMachineDirectoryTree.setCurrentIndex(ItemSelectedIndex)
-
+        AllItemSelectedIndexes = [Index for Index in self.ConnectedMachineDirectoryTree.selectionModel().selectedIndexes() if Index.column() == 0]
+        if AllItemSelectedIndexes:
             #Create menu items 
-            CurrentContextMenu = QMenu()
-            DownloadAction = CurrentContextMenu.addAction("Download")
-            CurrentContextMenu.addSeparator()
-            RenameAction = CurrentContextMenu.addAction("Rename")
-            DeleteAction = CurrentContextMenu.addAction("Delete")
+            ConnectedContextMenu = QMenu()
+            DownloadAction = ConnectedContextMenu.addAction("Download")
+            ConnectedContextMenu.addSeparator()
+            RenameAction = ConnectedContextMenu.addAction("Rename")
+            DeleteAction = ConnectedContextMenu.addAction("Delete")
 
-            MenuItemExecuted = CurrentContextMenu.exec(self.ConnectedMachineDirectoryTree.viewport().mapToGlobal(position))
-            ItemName = ItemSelectedIndex.siblingAtColumn(0).data()
-            ItemType = ItemSelectedIndex.siblingAtColumn(1).data()
-            ItemDate = ItemSelectedIndex.siblingAtColumn(2).data()
+            #Set menu item values to variables
+            AllItemAttributes = []
+            for Item in AllItemSelectedIndexes:
+                AllItemAttributes.append({
+                    "Origin View" : "ConnectedDirectoryModel",
+                    "Item Name" : Item.siblingAtColumn(0).data(), 
+                    "Item Type" : Item.siblingAtColumn(1).data(), 
+                    "Item Date" : Item.siblingAtColumn(2).data()
+                })
+
+            RenameAction.setEnabled(len(AllItemSelectedIndexes) == 1)
+            MenuItemExecuted = ConnectedContextMenu.exec(self.ConnectedMachineDirectoryTree.viewport().mapToGlobal(position))
 
             #Context menu item selected logic
             if MenuItemExecuted == DownloadAction:
-                self.ExecuteTransferringFiles(
-                    "Download"
-                    , [{
-                        "Origin View" : "ConnectedDirectoryModel",
-                        "Item Name" : ItemName, 
-                        "Item Type" : ItemType, 
-                        "Item Date" : ItemDate
-                    }])
+                self.ExecuteTransferringFiles("Download", AllItemAttributes)
             elif MenuItemExecuted == RenameAction:
-                self.ConnectedMachineDirectoryTree.edit(ItemSelectedIndex.siblingAtColumn(0))   
+                self.ConnectedMachineDirectoryTree.edit(AllItemSelectedIndexes[0].siblingAtColumn(0))   
             elif MenuItemExecuted == DeleteAction:
-                self.DeleteRemoteFiles(os.path.join(self.ConnectedDirEdit.text(), ItemName))
+                self.DeleteRemoteFiles(AllItemAttributes)
 
     def ToggleLoggingLevel(self, Level):
         self.actionError.setChecked(False)
@@ -658,7 +643,8 @@ class SSHClientMainWindow(QMainWindow):
             if self.PThread.isRunning():
                 self.PThread.quit()
             if not self.IncludesErrors(params):
-                logging.info(f"Server file successfully renamed '{params["Old Name"]}' → '{params["New Name"]}'")
+                if params["Old Name"] != params["New Name"]:
+                    logging.info(f"Server file successfully renamed '{params["Old Name"]}' → '{params["New Name"]}'")
             else:
                 raise params["Error Thrown"]
         except Exception as E:
@@ -684,19 +670,9 @@ class SSHClientMainWindow(QMainWindow):
         try:
             if not self.IncludesErrors(params):
                 logging.info(params["Message"])
-            else:
-                raise params["Error Thrown"]
-        except Exception as E:
-            logging.error(ERRORTEMPLATE.format(type(E).__name__, E.args)) 
-
-    @pyqtSlot(object) 
-    def FileTransferStarted(self, params):
-        try:
-            if not self.IncludesErrors(params):
-                TransferDirection = "←" if params["Transfer Type"] == "Download" else "→"
-                logging.info(f"Starting transfer '{params["Local Path"]}' {TransferDirection} '{params["Server Path"]}'...")  
-                self.StatusBarProgressBar.setRange(0, int(params["Item Size"]))
-                self.StatusBarProgressBar.show()
+                if "Item Size" in params:
+                    self.StatusBarProgressBar.setRange(0, int(params["Item Size"]))
+                    self.StatusBarProgressBar.show()
             else:
                 raise params["Error Thrown"]
         except Exception as E:

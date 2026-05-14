@@ -16,6 +16,11 @@ Future Features
     -Add more informative information on files in both directories (type of file, size)
         -Images for folder/files?
     -Add in a confirmation prompt for deletions
+    -Add in the ability to safely cancel an operation (Upload/Download)
+    -Add in a sync directories button
+        -Would ensure missing files in both active directories would be transferred to the other directory
+    -Add in notification for failed/corrupt transfers 
+    -Add in the option to connect via SSH certificates
     -Modify stylesheet to be more modern 
 
 Required Software
@@ -387,8 +392,9 @@ class SSHClientMainWindow(QMainWindow):
             self.LoadGivenRemoteDirectory(FullPath)
 
     def CurrentContextMenuGenerated(self, position):
+        ItemSelectedIndex = self.CurrentMachineDirectoryTree.indexAt(position) 
         AllItemSelectedIndexes = [Index for Index in self.CurrentMachineDirectoryTree.selectionModel().selectedIndexes() if Index.column() == 0]
-        if AllItemSelectedIndexes:
+        if ItemSelectedIndex.isValid() and AllItemSelectedIndexes:
             #Create menu items 
             CurrentContextMenu = QMenu()
             UploadAction = CurrentContextMenu.addAction("Upload")
@@ -420,8 +426,9 @@ class SSHClientMainWindow(QMainWindow):
                 self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()) 
                 
     def ConnectedContextMenuGenerated(self, position):
+        ItemSelectedIndex = self.ConnectedMachineDirectoryTree.indexAt(position) 
         AllItemSelectedIndexes = [Index for Index in self.ConnectedMachineDirectoryTree.selectionModel().selectedIndexes() if Index.column() == 0]
-        if AllItemSelectedIndexes:
+        if ItemSelectedIndex.isValid() and AllItemSelectedIndexes:
             #Create menu items 
             ConnectedContextMenu = QMenu()
             DownloadAction = ConnectedContextMenu.addAction("Download")
@@ -703,7 +710,7 @@ class SSHClientMainWindow(QMainWindow):
                     "Server Path" : params["Server Path"], 
                     "Directory Items" : params["Server Results"]
                 })
-                logging.info("Transfer complete")
+                logging.info("All file(s) successfully transferred")
             else:
                 raise params["Error Thrown"]
         except Exception as E:

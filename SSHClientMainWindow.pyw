@@ -736,7 +736,7 @@ if __name__ == "__main__":
             app = QApplication(sys.argv)
             app.setStyleSheet(Stylesheet.read())
             Main = SSHClientMainWindow()
-            Main.showMaximized()
+            #Main.showMaximized()
             Main.setWindowTitle(VERSIONNUMBER)
             Main.show()
             sys.exit(app.exec())

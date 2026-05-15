@@ -228,7 +228,7 @@ class QThreadWorker(QObject):
                             "Message" : f"Local folder sucessfully created at '{NextFolderLocal}'"
                         })
                     QueryResults = self.QueryForADirectoriesContentsRemote(NextFolderServer, FileExtensions)
-                    self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
+                    self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer, FileExtensions)
                 elif TypeOfTransfer == "Upload":
                     NextFolderLocal = f"{LocalViewPath}/{Item["Item Name"]}"
                     NextFolderServer = f"{ServerViewPath}/{Item["Item Name"]}"
@@ -239,7 +239,7 @@ class QThreadWorker(QObject):
                             "Message" : f"Server folder sucessfully created at '{NextFolderServer}'"
                         })
                     QueryResults = self.QueryForADirectoriesContentsLocal(NextFolderLocal, FileExtensions)
-                    self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
+                    self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer, FileExtensions)
             #Base case - Fetches or uploads file in the list
             else:
                 if TypeOfTransfer == "Download":

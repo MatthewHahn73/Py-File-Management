@@ -19,14 +19,15 @@ class QStandardItemModelCustom(QStandardItemModel):
         if not indexes:
             return None
         MimeData = QMimeData()
-        IndexRows = [indexes[i:i + 3] for i in range(0, len(indexes), 3)]
+        IndexRows = [indexes[i:i + 4] for i in range(0, len(indexes), 4)]
         RowsData = []
         for Row in IndexRows:
             RowsData.append({
-                "Origin View" : self.OriginView,
-                "Item Name" : self.itemFromIndex(Row[0]).text(), 
-                "Item Type" : self.itemFromIndex(Row[1]).text(), 
-                "Item Date" : self.itemFromIndex(Row[2]).text()
+                "Origin View" : self.OriginView
+                , "Item Name" : self.itemFromIndex(Row[0]).text()
+                , "Item Type" : self.itemFromIndex(Row[1]).text()
+                , "Item Size" : self.itemFromIndex(Row[2]).text()
+                , "Item Date" : self.itemFromIndex(Row[3]).text()
             })
         MimeData.setData(self.MIMEFormatType, json.dumps(RowsData).encode('utf-8'))
         return MimeData
@@ -51,7 +52,7 @@ class QStandardItemModelCustom(QStandardItemModel):
 
     def flags(self, index):
         default_flags = super().flags(index) 
-        if (index.isValid and index.column() in (0, 1, 2)): # Remove dropping to any sub folders
+        if (index.isValid and index.column() in (0, 1, 2, 3)): # Remove dropping to any sub folders
             return default_flags & ~Qt.ItemFlag.ItemIsDropEnabled   
         return default_flags
 

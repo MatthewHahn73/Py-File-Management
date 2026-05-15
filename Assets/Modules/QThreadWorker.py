@@ -26,12 +26,12 @@ class QThreadWorker(QObject):
                 ServerErrorOuput = stderr.read().decode().strip()
                 if not ServerErrorOuput:
                     RemoteDefaultDirectory = stdout.read().decode().strip()
-                    QueryResults = self.QueryServerForADirectoriesContentsRemote(RemoteDefaultDirectory)
+                    QueryResults = self.QueryForADirectoriesContentsRemote(RemoteDefaultDirectory, self.MiscParameters["File Extensions"])
                     self.completeDataSignal.emit({
-                        "SSH Object" : self.SSHObject, 
-                        "SFTP Object" : self.SFTPObject,
-                        "Server Path" : RemoteDefaultDirectory, 
-                        "Directory Items" : QueryResults
+                        "SSH Object" : self.SSHObject
+                        , "SFTP Object" : self.SFTPObject
+                        , "Server Path" : RemoteDefaultDirectory
+                        , "Directory Items" : QueryResults
                     })
                 else: 
                     raise Exception(ServerErrorOuput)
@@ -50,8 +50,8 @@ class QThreadWorker(QObject):
             SSHTransport = self.SSHObject.get_transport()
             if (SSHTransport is None or not SSHTransport.is_active()):
                 self.completeDataSignal.emit({
-                    "SSH Object" : self.SSHObject, 
-                    "SFTP Object" : self.SFTPObject,
+                    "SSH Object" : self.SSHObject
+                    , "SFTP Object" : self.SFTPObject
                 })
             else:
                 raise Exception(f"Unable to safely disconnect from the server")
@@ -62,11 +62,11 @@ class QThreadWorker(QObject):
 
     def QueryDirectoriesContentsLocalRequest(self):
         try:
-            QueryResults = self.QueryServerForADirectoriesContentsLocal(self.MiscParameters["Local Path"])
+            QueryResults = self.QueryForADirectoriesContentsLocal(self.MiscParameters["Local Path"], self.MiscParameters["File Extensions"])
             if (type(QueryResults) == list):
                 self.completeDataSignal.emit({
-                    "Local Path" : self.MiscParameters["Local Path"], 
-                    "Directory Items" : QueryResults
+                    "Local Path" : self.MiscParameters["Local Path"] 
+                    , "Directory Items" : QueryResults
                 })
             else:
                 raise QueryResults
@@ -75,33 +75,37 @@ class QThreadWorker(QObject):
                 "Error Thrown" : e
             })
 
-    def QueryServerForADirectoriesContentsLocal(self, LocalPath):
+    def QueryForADirectoriesContentsLocal(self, LocalPath, FileExtensions):
         if not os.path.isdir(LocalPath):
             return Exception(f"Cannot navigate to '{LocalPath}'. It is a file")
         else:
             DirectoryItems = os.listdir(LocalPath)
             DirectoryItemList = []
             for DirectoryItem in os.listdir(LocalPath):
-                DirectoryItemPath = f"{LocalPath}/{DirectoryItem}" 
+                DirectoryItemPath = os.path.join(LocalPath, DirectoryItem)
+                ItemType, ItemSize = "", -1
                 if os.path.exists(DirectoryItemPath):
-                    if os.path.isdir(DirectoryItemPath):
+                    if os.path.isfile(DirectoryItemPath):
+                        ItemType = self.ReturnFileExtension(DirectoryItemPath, FileExtensions)
+                        ItemSize = self.ReturnReadableFileSize(os.path.getsize(DirectoryItemPath))
+                    elif os.path.isdir(DirectoryItemPath):
                         ItemType = "Folder"
-                    elif os.path.isfile(DirectoryItemPath):
-                        ItemType = "File"
+                        ItemSize = ""
                     DirectoryItemList.append({
-                        "Item Name" : os.path.basename(DirectoryItemPath), 
-                        "Item Type" : ItemType,
-                        "Item Date" : str(datetime.datetime.fromtimestamp(os.stat(DirectoryItemPath).st_mtime).strftime('%Y-%m-%d %I:%M %p'))
+                        "Item Name" : os.path.basename(DirectoryItemPath)
+                        , "Item Type" : ItemType
+                        , "Item Size" : ItemSize
+                        , "Item Date" : str(datetime.datetime.fromtimestamp(os.stat(DirectoryItemPath).st_mtime).strftime('%Y-%m-%d %I:%M %p'))
                     })
             return DirectoryItemList
 
     def QueryDirectoriesContentsServerRequest(self):
         try:
-            QueryResults = self.QueryServerForADirectoriesContentsRemote(self.MiscParameters["Server Path"])
+            QueryResults = self.QueryForADirectoriesContentsRemote(self.MiscParameters["Server Path"], self.MiscParameters["File Extensions"])
             if (type(QueryResults) == list):
                 self.completeDataSignal.emit({
-                    "Server Path" : self.MiscParameters["Server Path"], 
-                    "Directory Items" : QueryResults
+                    "Server Path" : self.MiscParameters["Server Path"]
+                    , "Directory Items" : QueryResults
                 })
             else:
                 raise QueryResults
@@ -110,22 +114,29 @@ class QThreadWorker(QObject):
                 "Error Thrown" : e
             })
 
-    def QueryServerForADirectoriesContentsRemote(self, ServerPath):
+    def QueryForADirectoriesContentsRemote(self, ServerPath, FileExtensions):
         PathAttributes = self.SFTPObject.lstat(ServerPath)
         if stat.S_ISREG(PathAttributes.st_mode):
             return Exception(f"Cannot navigate to '{ServerPath}'. It is a file")
         else:
             DirectoryItemList = []
-            for Item in self.SFTPObject.listdir_attr(ServerPath): 
-                ItemType = ""
-                if stat.S_ISREG(Item.st_mode):
-                    ItemType = "File"
-                elif stat.S_ISDIR(Item.st_mode) or stat.S_ISLNK(Item.st_mode):
+            for DirectoryItem in self.SFTPObject.listdir_attr(ServerPath): 
+                DirectoryItemPath = os.path.join(ServerPath, DirectoryItem.filename)
+                ItemType, ItemSize = "", -1
+                if stat.S_ISREG(DirectoryItem.st_mode):     #File
+                    ItemType = self.ReturnFileExtension(DirectoryItemPath, FileExtensions)
+                    ItemSize = self.ReturnReadableFileSize(DirectoryItem.st_size)
+                elif stat.S_ISDIR(DirectoryItem.st_mode):   #Directory
                     ItemType = "Folder"
+                    ItemSize = ""
+                elif stat.S_ISLNK(DirectoryItem.st_mode):   #Symbolic Directory
+                    ItemType = "Folder (Symlink)"
+                    ItemSize = ""
                 DirectoryItemList.append({
-                    "Item Name" : Item.filename, 
-                    "Item Type" : ItemType,
-                    "Item Date" : str(datetime.datetime.fromtimestamp(Item.st_mtime).strftime('%Y-%m-%d %I:%M %p'))
+                    "Item Name" : DirectoryItem.filename
+                    , "Item Type" : ItemType
+                    , "Item Size" : ItemSize
+                    , "Item Date" : str(datetime.datetime.fromtimestamp(DirectoryItem.st_mtime).strftime('%Y-%m-%d %I:%M %p'))
                 })
             return DirectoryItemList
             
@@ -133,10 +144,21 @@ class QThreadWorker(QObject):
         try:
             if self.MiscParameters["Old Name"] != self.MiscParameters["New Name"]:
                 self.SFTPObject.rename(self.MiscParameters["Old Name"], self.MiscParameters["New Name"])
-            self.completeDataSignal.emit({
-                "Old Name" : self.MiscParameters["Old Name"],
-                "New Name" : self.MiscParameters["New Name"]
-            })        
+                QueryResults = self.QueryForADirectoriesContentsRemote(self.MiscParameters["Server Path"], self.MiscParameters["File Extensions"])
+                if (type(QueryResults) == list):
+                    self.completeDataSignal.emit({
+                        "Old Name" : self.MiscParameters["Old Name"]
+                        , "New Name" : self.MiscParameters["New Name"]
+                        , "Server Path" : self.MiscParameters["Server Path"]
+                        , "Server Results" : QueryResults
+                    })        
+                else:
+                    raise QueryResults
+            else: 
+                self.completeDataSignal.emit({
+                    "Old Name" : self.MiscParameters["Old Name"]
+                    , "New Name" : self.MiscParameters["New Name"]
+                })        
         except Exception as e: 
             self.completeDataSignal.emit({
                 "Error Thrown" : e
@@ -146,11 +168,11 @@ class QThreadWorker(QObject):
         try:
             for Item in self.MiscParameters["Directory Items"]:
                 self.DeleteFileOrDirectory(os.path.join(self.MiscParameters["Server Path"], Item["Item Name"]))
-            QueryResults = self.QueryServerForADirectoriesContentsRemote(self.MiscParameters["Server Path"])
+            QueryResults = self.QueryForADirectoriesContentsRemote(self.MiscParameters["Server Path"], self.MiscParameters["File Extensions"])
             if (type(QueryResults) == list):
                 self.completeDataSignal.emit({
-                    "Server Path" : self.MiscParameters["Server Path"], 
-                    "Server Results" : QueryResults
+                    "Server Path" : self.MiscParameters["Server Path"]
+                    , "Server Results" : QueryResults
                 })
             else:
                 raise QueryResults
@@ -175,19 +197,25 @@ class QThreadWorker(QObject):
 
     def TransferFilesServerRequest(self):     
         try:
-            self.TransferFiles(self.MiscParameters["Transfer Data"], self.MiscParameters["Local Path"], self.MiscParameters["Server Path"], self.MiscParameters["Transfer Type"])
+            self.TransferFiles(
+                self.MiscParameters["Transfer Data"]
+                , self.MiscParameters["Local Path"]
+                , self.MiscParameters["Server Path"]
+                , self.MiscParameters["Transfer Type"]
+                , self.MiscParameters["File Extensions"]
+            )
             self.completeDataSignal.emit({
-                "Local Path" : self.MiscParameters["Local Path"],
-                "Local Results" : self.QueryServerForADirectoriesContentsLocal(self.MiscParameters["Local Path"]), 
-                "Server Path" : self.MiscParameters["Server Path"],
-                "Server Results" : self.QueryServerForADirectoriesContentsRemote(self.MiscParameters["Server Path"])
+                "Local Path" : self.MiscParameters["Local Path"]
+                , "Local Results" : self.QueryForADirectoriesContentsLocal(self.MiscParameters["Local Path"], self.MiscParameters["File Extensions"]) 
+                , "Server Path" : self.MiscParameters["Server Path"]
+                , "Server Results" : self.QueryForADirectoriesContentsRemote(self.MiscParameters["Server Path"], self.MiscParameters["File Extensions"])
             })        
         except Exception as e: 
             self.completeDataSignal.emit({
                 "Error Thrown" : e
             })
 
-    def TransferFiles(self, TransferItems, LocalViewPath, ServerViewPath, TypeOfTransfer):             
+    def TransferFiles(self, TransferItems, LocalViewPath, ServerViewPath, TypeOfTransfer, FileExtensions):             
         for Item in TransferItems:
             #Recursion case. Fetches the next directory's attributes and calls the function again
             if Item["Item Type"] == "Folder":
@@ -199,7 +227,7 @@ class QThreadWorker(QObject):
                         self.serverMessage.emit({
                             "Message" : f"Local folder sucessfully created at '{NextFolderLocal}'"
                         })
-                    QueryResults = self.QueryServerForADirectoriesContentsRemote(NextFolderServer)
+                    QueryResults = self.QueryForADirectoriesContentsRemote(NextFolderServer, FileExtensions)
                     self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
                 elif TypeOfTransfer == "Upload":
                     NextFolderLocal = f"{LocalViewPath}/{Item["Item Name"]}"
@@ -210,41 +238,51 @@ class QThreadWorker(QObject):
                         self.serverMessage.emit({
                             "Message" : f"Server folder sucessfully created at '{NextFolderServer}'"
                         })
-                    QueryResults = self.QueryServerForADirectoriesContentsLocal(NextFolderLocal)
+                    QueryResults = self.QueryForADirectoriesContentsLocal(NextFolderLocal, FileExtensions)
                     self.TransferFiles(QueryResults, NextFolderLocal, NextFolderServer, TypeOfTransfer)
             #Base case - Fetches or uploads file in the list
-            elif Item["Item Type"] == "File":
+            else:
                 if TypeOfTransfer == "Download":
                     ServerPathItem = f"{ServerViewPath}/{Item["Item Name"]}"
                     LocalPathItem = f"{LocalViewPath}/{Item["Item Name"]}"
-                    FileStat = self.SFTPObject.stat(ServerPathItem)
-                    self.serverMessage.emit({
-                        "Message" : f"Starting transfer '{LocalPathItem}' ← '{ServerPathItem}'...",
-                        "Item Size": FileStat.st_size
-                    })
-                    self.SFTPObject.get(ServerPathItem, LocalPathItem, callback=self.TransferProgess)
-                    self.transferCompleteLocal.emit({
-                        "Local Path" : LocalViewPath, 
-                        "Directory Items" : self.QueryServerForADirectoriesContentsLocal(LocalViewPath)
-                    })
+                    try:
+                        FileStat = self.SFTPObject.stat(ServerPathItem)
+                        self.serverMessage.emit({
+                            "Message" : f"Starting transfer '{LocalPathItem}' ← '{ServerPathItem}'..."
+                            , "Item Size": FileStat.st_size
+                        })
+                        self.SFTPObject.get(ServerPathItem, LocalPathItem, callback=self.TransferProgess)
+                        self.transferCompleteLocal.emit({
+                            "Local Path" : LocalViewPath
+                            , "Directory Items" : self.QueryForADirectoriesContentsLocal(LocalViewPath, FileExtensions)
+                        })
+                    except FileNotFoundError as FNF: 
+                        self.serverMessage.emit({
+                            "Message" : f"File not found or symlink broken: '{ServerPathItem}'. Skipping ..."
+                        })
                 elif TypeOfTransfer == "Upload": 
                     ServerPathItem = f"{ServerViewPath}/{Item["Item Name"]}"
                     LocalPathItem = f"{LocalViewPath}/{Item["Item Name"]}"
-                    FileSize = os.path.getsize(LocalPathItem)
-                    self.serverMessage.emit({
-                        "Message" : f"Starting transfer '{LocalPathItem}' → '{ServerPathItem}'...",
-                        "Item Size": FileSize
-                    })
-                    self.SFTPObject.put(LocalPathItem, ServerPathItem, callback=self.TransferProgess)
-                    self.transferCompleteRemote.emit({
-                        "Server Path" : ServerViewPath, 
-                        "Directory Items" : self.QueryServerForADirectoriesContentsRemote(ServerViewPath)
-                    })
+                    try:
+                        FileSize = os.path.getsize(LocalPathItem)
+                        self.serverMessage.emit({
+                            "Message" : f"Starting transfer '{LocalPathItem}' → '{ServerPathItem}'..."
+                            , "Item Size": FileSize
+                        })
+                        self.SFTPObject.put(LocalPathItem, ServerPathItem, callback=self.TransferProgess)
+                        self.transferCompleteRemote.emit({
+                            "Server Path" : ServerViewPath
+                            , "Directory Items" : self.QueryForADirectoriesContentsRemote(ServerViewPath, FileExtensions)
+                        })
+                    except FileNotFoundError as FNF: 
+                        self.serverMessage.emit({
+                            "Message" : f"File not found or symlink broken: '{LocalPathItem}'. Skipping ..."
+                        })
         
     def TransferProgess(self, bytesSoFar, totalBytes):
         self.transferProgress.emit({
-            "Current Bytes": bytesSoFar, 
-            "Total Bytes": totalBytes
+            "Current Bytes": bytesSoFar
+            , "Total Bytes": totalBytes
         })
 
     def ReturnRemoteDirectory(self, ServerPath):
@@ -253,3 +291,15 @@ class QThreadWorker(QObject):
             return stat.S_ISDIR(DirectoryStats.st_mode)
         except IOError:
             return False
+    
+    def ReturnFileExtension(self, FileName, FileExtensions):
+        Root, Extension = os.path.splitext(FileName)
+        return FileExtensions[Extension] if Extension in FileExtensions else "File"
+
+    def ReturnReadableFileSize(self, Size):
+        Units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+        Index = 0
+        while Size >= 1024 and Index < len(Units) - 1:
+            Size /= 1024
+            Index += 1
+        return f"{Size:.2f} {Units[Index]}"

@@ -93,26 +93,16 @@ Loaded GUI Resources (And structure)
                 -actionInfo (QAction)
                 -actionWarning (QAction)
         -menuServer (QMenu)
-            -actionCancel_Current_Operation (QAction)
             -actionDisconnect (QAction)
-            -seperator
     -SMTPStatusBar (QStatusBar)
 """
 
-import os, logging, sys, paramiko, platform, ctypes, json, shutil
+import os, logging, sys, paramiko, platform, json
 from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
 from PyQt6.QtSvg import *
 from PyQt6 import uic
-from socket import \
-    error as SocketError \
-    , timeout as SocketTimeout
-from paramiko.ssh_exception import \
-    NoValidConnectionsError \
-    , PasswordRequiredException \
-    , AuthenticationException \
-    , SSHException
 from Assets.Modules import \
     QLogHandler as LogHanderObject \
     , QThreadWorker as ThreadWorkerObject \
@@ -192,6 +182,9 @@ class SSHClientMainWindow(QMainWindow):
         #Set status label
         self.UpdateStatusLabel("Disconnected", "white")
 
+        #Load in file extensions
+        self.FileExtensionDict = self.ReturnFileExtensions()
+
         #Load home directory
         self.CurrentDirEdit.setText(QDir.homePath())
         self.LoadGivenLocalDirectory(self.CurrentDirEdit.text())
@@ -205,10 +198,13 @@ class SSHClientMainWindow(QMainWindow):
         self.PWorker = ThreadWorkerObject.QThreadWorker (
                 SSHObj = self.SSHObject
                 , Conn = {
-                    "Host": self.B_HostEdit.text(), 
-                    "Port": self.B_PortEdit.text(), 
-                    "Username": self.B_UsernameEdit.text(), 
-                    "Password": self.B_PasswordEdit.text()
+                    "Host": self.B_HostEdit.text()
+                    , "Port": self.B_PortEdit.text()
+                    , "Username": self.B_UsernameEdit.text()
+                    , "Password": self.B_PasswordEdit.text()
+                }
+                , Misc = {
+                    "File Extensions" : self.FileExtensionDict
                 }
             )
         self.PWorker.moveToThread(self.PThread)
@@ -231,7 +227,8 @@ class SSHClientMainWindow(QMainWindow):
             self.PThread = QThread(self) 
             self.PWorker = ThreadWorkerObject.QThreadWorker (
                     Misc = {
-                        "Local Path": Path, 
+                        "Local Path": Path
+                        , "File Extensions" : self.FileExtensionDict
                     }
                 )
             self.PWorker.moveToThread(self.PThread)
@@ -250,7 +247,8 @@ class SSHClientMainWindow(QMainWindow):
                         SSHObj = self.SSHObject
                         , SFTPObj = self.SFTPObject
                         , Misc = {
-                            "Server Path": Path, 
+                            "Server Path": Path
+                            , "File Extensions" : self.FileExtensionDict
                         }
                     )
                 self.PWorker.moveToThread(self.PThread)
@@ -271,10 +269,11 @@ class SSHClientMainWindow(QMainWindow):
                         SSHObj = self.SSHObject
                         , SFTPObj = self.SFTPObject
                         , Misc = {
-                            "Transfer Type" : Type, 
-                            "Transfer Data": TransferData,
-                            "Local Path": self.CurrentDirEdit.text(),
-                            "Server Path": self.ConnectedDirEdit.text(), 
+                            "Transfer Type" : Type
+                            , "Transfer Data": TransferData
+                            , "Local Path": self.CurrentDirEdit.text()
+                            , "Server Path": self.ConnectedDirEdit.text()
+                            , "File Extensions" : self.FileExtensionDict
                         }
                     )
                 self.PWorker.moveToThread(self.PThread)
@@ -299,8 +298,10 @@ class SSHClientMainWindow(QMainWindow):
                         SSHObj = self.SSHObject
                         , SFTPObj = self.SFTPObject
                         , Misc = {
-                            "Old Name": os.path.join(self.ConnectedDirEdit.text(), OldValue), 
-                            "New Name": os.path.join(self.ConnectedDirEdit.text(), NewValue)
+                            "Old Name": os.path.join(self.ConnectedDirEdit.text(), OldValue)
+                            , "New Name": os.path.join(self.ConnectedDirEdit.text(), NewValue)
+                            , "Server Path" : self.ConnectedDirEdit.text()
+                            , "File Extensions" : self.FileExtensionDict
                         }
                     )
                 self.PWorker.moveToThread(self.PThread)
@@ -321,8 +322,9 @@ class SSHClientMainWindow(QMainWindow):
                         SSHObj = self.SSHObject
                         , SFTPObj = self.SFTPObject
                         , Misc = {
-                            "Server Path": self.ConnectedDirEdit.text(),
-                            "Directory Items" : Items
+                            "Server Path": self.ConnectedDirEdit.text()
+                            , "Directory Items" : Items
+                            , "File Extensions" : self.FileExtensionDict
                         }
                     )
                 self.PWorker.moveToThread(self.PThread)
@@ -406,10 +408,11 @@ class SSHClientMainWindow(QMainWindow):
             AllItemAttributes = []
             for Item in AllItemSelectedIndexes:
                 AllItemAttributes.append({
-                    "Origin View" : "CurrentDirectoryModel",
-                    "Item Name" : Item.siblingAtColumn(0).data(), 
-                    "Item Type" : Item.siblingAtColumn(1).data(), 
-                    "Item Date" : Item.siblingAtColumn(2).data()
+                    "Origin View" : "CurrentDirectoryModel"
+                    , "Item Name" : Item.siblingAtColumn(0).data()
+                    , "Item Type" : Item.siblingAtColumn(1).data()
+                    , "Item Size" : Item.siblingAtColumn(2).data()
+                    , "Item Date" : Item.siblingAtColumn(3).data()
                 })
 
             RenameAction.setEnabled(len(AllItemSelectedIndexes) == 1)
@@ -440,10 +443,11 @@ class SSHClientMainWindow(QMainWindow):
             AllItemAttributes = []
             for Item in AllItemSelectedIndexes:
                 AllItemAttributes.append({
-                    "Origin View" : "ConnectedDirectoryModel",
-                    "Item Name" : Item.siblingAtColumn(0).data(), 
-                    "Item Type" : Item.siblingAtColumn(1).data(), 
-                    "Item Date" : Item.siblingAtColumn(2).data()
+                    "Origin View" : "ConnectedDirectoryModel"
+                    , "Item Name" : Item.siblingAtColumn(0).data()
+                    , "Item Type" : Item.siblingAtColumn(1).data()
+                    , "Item Size" : Item.siblingAtColumn(2).data()
+                    , "Item Date" : Item.siblingAtColumn(3).data()
                 })
 
             RenameAction.setEnabled(len(AllItemSelectedIndexes) == 1)
@@ -494,14 +498,17 @@ class SSHClientMainWindow(QMainWindow):
             return True
         return False
 
+    def ReturnFileExtensions(self):
+        try:
+            with open("Assets/Files/FileExtensions.json") as File:
+                return json.load(File)
+        except Exception as e:
+            logging.error(ERRORTEMPLATE.format(type(Error).__name__, Error.args)) 
+
     def ReturnHiddenItem(self, ItemPath):        
         if platform.system() != "Windows":  #Linux
             return os.path.basename(os.path.abspath(ItemPath)).startswith('.')
-        try:                                #Windows
-            attrs = ctypes.windll.kernel32.GetFileAttributesW(ItemPath)
-            return attrs != -1 and (attrs & 0x02) != 0
-        except:
-            return False 
+        return False 
 
     def closeEvent(self, event):
         logging.getLogger().removeHandler(self.LogHandler)
@@ -561,8 +568,8 @@ class SSHClientMainWindow(QMainWindow):
                     self.UpdateStatusLabel(f"Connected to {TransportInfo[0]}:{TransportInfo[1]}", "#2bfb75")
                     logging.info(f"SSH connection successful to {TransportInfo[0]} on port {TransportInfo[1]}")
                     self.ServerQueryResults({
-                        "Server Path" : params["Server Path"], 
-                        "Directory Items" : params["Directory Items"]
+                        "Server Path" : params["Server Path"]
+                        , "Directory Items" : params["Directory Items"]
                     })
                 else:
                     raise Exception("SSH/SFTP connection could not be estasblished")
@@ -584,7 +591,7 @@ class SSHClientMainWindow(QMainWindow):
                     self.ConnectedMachineDirectoryTree.setModel(None)
                     self.ConnectedDirEdit.setText("")
                     self.UpdateStatusLabel("Disconnected", "white")
-                    logging.info("SSH disconnection successful")
+                    logging.info("SSH session closed")
             else:
                 raise params["Error Thrown"]
         except Exception as E:
@@ -598,14 +605,14 @@ class SSHClientMainWindow(QMainWindow):
             if not self.IncludesErrors(params):   
                 ShowHidden, LocalPath, DirectoryItemsList = self.CurrentHiddenToggleCheckbox.isChecked(), params["Local Path"], params["Directory Items"]
                 self.CurrentDirectoryModel.clear() 
-                self.CurrentDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
+                self.CurrentDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "File Size", "Date Modified"])
                 for DirectoryItem in DirectoryItemsList:
                     DirectoryItemPath = os.path.join(LocalPath, DirectoryItem["Item Name"])
                     IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
                     if (not IsHiddenItem) or (IsHiddenItem and self.CurrentHiddenToggleCheckbox.isChecked()):
-                        ItemName, ItemType, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Date"]
+                        ItemName, ItemType, ItemSize, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Size"], DirectoryItem["Item Date"]
                         if ItemName != None:
-                            DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
+                            DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemSize), QStandardItem(ItemModified)]
                             self.CurrentDirectoryModel.appendRow(DirectoryItemRow)
                 self.CurrentMachineDirectoryTree.setModel(self.CurrentDirectoryModel)
                 self.CurrentMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
@@ -625,14 +632,14 @@ class SSHClientMainWindow(QMainWindow):
             if not self.IncludesErrors(params):   
                 ShowHidden, ServerPath, DirectoryItemsList = self.ConnectedHiddenToggleCheckbox.isChecked(), params["Server Path"], params["Directory Items"]
                 self.ConnectedDirectoryModel.clear() 
-                self.ConnectedDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "Date Modified"])
+                self.ConnectedDirectoryModel.setHorizontalHeaderLabels(["Name", "Type", "File Size", "Date Modified"])
                 for DirectoryItem in DirectoryItemsList:
                     DirectoryItemPath = os.path.join(ServerPath, DirectoryItem["Item Name"])
                     IsHiddenItem = self.ReturnHiddenItem(DirectoryItemPath)
                     if (not IsHiddenItem) or (IsHiddenItem and ShowHidden):
-                        ItemName, ItemType, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Date"]
+                        ItemName, ItemType, ItemSize, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Size"], DirectoryItem["Item Date"]
                         if ItemName != None:
-                            DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemModified)]
+                            DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemSize), QStandardItem(ItemModified)]
                             self.ConnectedDirectoryModel.appendRow(DirectoryItemRow)
                 self.ConnectedMachineDirectoryTree.setModel(self.ConnectedDirectoryModel)
                 self.ConnectedMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
@@ -651,6 +658,10 @@ class SSHClientMainWindow(QMainWindow):
                 self.PThread.quit()
             if not self.IncludesErrors(params):
                 if params["Old Name"] != params["New Name"]:
+                    self.ServerQueryResults({
+                        "Server Path" : params["Server Path"]
+                        , "Directory Items" : params["Server Results"]
+                    })
                     logging.info(f"Server file successfully renamed '{params["Old Name"]}' → '{params["New Name"]}'")
             else:
                 raise params["Error Thrown"]
@@ -664,8 +675,8 @@ class SSHClientMainWindow(QMainWindow):
                 self.PThread.quit()
             if not self.IncludesErrors(params):
                 self.ServerQueryResults({
-                    "Server Path" : params["Server Path"], 
-                    "Directory Items" : params["Server Results"]
+                    "Server Path" : params["Server Path"]
+                    , "Directory Items" : params["Server Results"]
                 })
             else:
                 raise params["Error Thrown"]
@@ -703,12 +714,12 @@ class SSHClientMainWindow(QMainWindow):
                 self.PThread.quit()
             if not self.IncludesErrors(params): 
                 self.LocalQueryResults({
-                    "Local Path" : params["Local Path"], 
-                    "Directory Items" : params["Local Results"]
+                    "Local Path" : params["Local Path"]
+                    , "Directory Items" : params["Local Results"]
                 })
                 self.ServerQueryResults({
-                    "Server Path" : params["Server Path"], 
-                    "Directory Items" : params["Server Results"]
+                    "Server Path" : params["Server Path"]
+                    , "Directory Items" : params["Server Results"]
                 })
                 logging.info("All file(s) successfully transferred")
             else:
@@ -724,8 +735,8 @@ if __name__ == "__main__":
         with open(StylesheetPath) as Stylesheet:
             app = QApplication(sys.argv)
             app.setStyleSheet(Stylesheet.read())
-            Clipboard = app.clipboard()
             Main = SSHClientMainWindow()
+            Main.showMaximized()
             Main.setWindowTitle(VERSIONNUMBER)
             Main.show()
             sys.exit(app.exec())

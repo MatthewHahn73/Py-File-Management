@@ -97,7 +97,7 @@ Loaded GUI Resources (And structure)
     -SMTPStatusBar (QStatusBar)
 """
 
-import os, logging, sys, paramiko, platform, json
+import os, logging, sys, paramiko, platform, json, math
 from PyQt6.QtWidgets import *
 from PyQt6.QtGui import *
 from PyQt6.QtCore import *
@@ -137,6 +137,7 @@ class SSHClientMainWindow(QMainWindow):
         self.StatusBarLabel.setContentsMargins(5,0,0,0)
         self.SMTPStatusBar.addWidget(self.StatusBarLabel, 1)
         self.StatusBarProgressBar = QProgressBar()
+        self.StatusBarProgressBar.setRange(0, 100)
         self.StatusBarProgressBar.setFixedSize(200, 25)
         self.SMTPStatusBar.addWidget(self.StatusBarProgressBar, 1)
         self.StatusBarProgressBar.hide()
@@ -193,34 +194,40 @@ class SSHClientMainWindow(QMainWindow):
         self.setWindowIcon(QIcon("Assets/Icons/Padlock_Icon.ico"))
 
     def ExecuteConnectButton(self):
-        self.UpdateStatusLabel("Disconnected", "white")
-        self.PThread = QThread(self) 
-        self.PWorker = ThreadWorkerObject.QThreadWorker (
-                SSHObj = self.SSHObject
-                , Conn = {
-                    "Host": self.B_HostEdit.text()
-                    , "Port": self.B_PortEdit.text()
-                    , "Username": self.B_UsernameEdit.text()
-                    , "Password": self.B_PasswordEdit.text()
-                }
-                , Misc = {
-                    "File Extensions" : self.FileExtensionDict
-                }
-            )
-        self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.ConnectAndOpenSFTP)    
-        self.PWorker.completeDataSignal.connect(self.ConnectionToServerResults)
-        self.PThread.start()
+        if not self.PThread.isRunning():
+            self.UpdateStatusLabel("Disconnected", "white")
+            self.PThread = QThread(self) 
+            self.PWorker = ThreadWorkerObject.QThreadWorker (
+                    SSHObj = self.SSHObject
+                    , Conn = {
+                        "Host": self.B_HostEdit.text()
+                        , "Port": self.B_PortEdit.text()
+                        , "Username": self.B_UsernameEdit.text()
+                        , "Password": self.B_PasswordEdit.text()
+                    }
+                    , Misc = {
+                        "File Extensions" : self.FileExtensionDict
+                    }
+                )
+            self.PWorker.moveToThread(self.PThread)
+            self.PThread.started.connect(self.PWorker.ConnectAndOpenSFTP)    
+            self.PWorker.completeDataSignal.connect(self.ConnectionToServerResults)
+            self.PThread.start()
+        else:
+            logging.warning("Cannot attempt connection to server while secondary thread is in use")
 
     def ExecuteDisconnectButton(self):
-        self.PThread = QThread(self) 
-        self.PWorker = ThreadWorkerObject.QThreadWorker (
-                SSHObj = self.SSHObject
-            )
-        self.PWorker.moveToThread(self.PThread)
-        self.PThread.started.connect(self.PWorker.DisconnectAndCloseSFTP)    
-        self.PWorker.completeDataSignal.connect(self.DisconnectionToServerResults)
-        self.PThread.start()
+        if not self.PThread.isRunning():
+            self.PThread = QThread(self) 
+            self.PWorker = ThreadWorkerObject.QThreadWorker (
+                    SSHObj = self.SSHObject
+                )
+            self.PWorker.moveToThread(self.PThread)
+            self.PThread.started.connect(self.PWorker.DisconnectAndCloseSFTP)    
+            self.PWorker.completeDataSignal.connect(self.DisconnectionToServerResults)
+            self.PThread.start()
+        else:
+            logging.warning("Cannot attempt disconnection to server while secondary thread is in use")
 
     def LoadGivenLocalDirectory(self, Path):
         if not self.PThread.isRunning():
@@ -359,15 +366,23 @@ class SSHClientMainWindow(QMainWindow):
         Checked = self.CurrentHiddenToggleCheckbox.isChecked()
         CurrentDir = QDir.currentPath()
         ChangedIconPath = f"{CurrentDir}/Assets/Icons/view-visible.svg" if Checked else f"{CurrentDir}/Assets/Icons/view-hidden.svg"
-        self.CurrentHiddenToggleCheckbox.setIcon(QIcon(ChangedIconPath))
-        self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()) 
+        if not self.PThread.isRunning():
+            self.CurrentHiddenToggleCheckbox.setIcon(QIcon(ChangedIconPath))
+            self.LoadGivenLocalDirectory(self.CurrentDirEdit.text()) 
+        else:
+            logging.warning(f"Cannot fetch local directory while secondary thread is active")
+            self.CurrentHiddenToggleCheckbox.setChecked(not Checked)
 
     def ExecuteShowConnectedHiddenFilesButton(self):
         Checked = self.ConnectedHiddenToggleCheckbox.isChecked()
         ConnectedDir = QDir.currentPath()
         ChangedIconPath = f"{ConnectedDir}/Assets/Icons/view-visible.svg" if Checked else f"{ConnectedDir}/Assets/Icons/view-hidden.svg"
-        self.ConnectedHiddenToggleCheckbox.setIcon(QIcon(ChangedIconPath))
-        self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text()) 
+        if not self.PThread.isRunning():
+            self.ConnectedHiddenToggleCheckbox.setIcon(QIcon(ChangedIconPath))
+            self.LoadGivenRemoteDirectory(self.ConnectedDirEdit.text()) 
+        else:
+            logging.warning(f"Cannot fetch local directory while secondary thread is active")
+            self.ConnectedHiddenToggleCheckbox.setChecked(not Checked)
 
     def ExecuteCurrentNavigateOneUpButton(self): 
         OneDirectoryUp = os.path.dirname(self.CurrentDirEdit.text())
@@ -505,6 +520,14 @@ class SSHClientMainWindow(QMainWindow):
         except Exception as e:
             logging.error(ERRORTEMPLATE.format(type(Error).__name__, Error.args)) 
 
+    def ReturnFileIcon(self, FileType):
+        if "Folder" in FileType: 
+            return "Assets/Icons/Representations/folder-representation.svg"
+        if FileType in list(self.FileExtensionDict.values()):
+            ParsedFileType = FileType.replace(" ", "-").lower()
+            #return f"Assets/Icons/{ParsedFileType}-representation.svg"
+        return f"Assets/Icons/Representations/file-representation.svg"
+
     def ReturnHiddenItem(self, ItemPath):        
         if platform.system() != "Windows":  #Linux
             return os.path.basename(os.path.abspath(ItemPath)).startswith('.')
@@ -612,11 +635,14 @@ class SSHClientMainWindow(QMainWindow):
                     if (not IsHiddenItem) or (IsHiddenItem and self.CurrentHiddenToggleCheckbox.isChecked()):
                         ItemName, ItemType, ItemSize, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Size"], DirectoryItem["Item Date"]
                         if ItemName != None:
-                            DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemSize), QStandardItem(ItemModified)]
+                            ItemNameObject = QStandardItem(ItemName)
+                            ItemNameIcon = QIcon(self.ReturnFileIcon(ItemType))
+                            ItemNameObject.setIcon(ItemNameIcon)
+                            DirectoryItemRow = [ItemNameObject, QStandardItem(ItemType), QStandardItem(ItemSize), QStandardItem(ItemModified)]
                             self.CurrentDirectoryModel.appendRow(DirectoryItemRow)
                 self.CurrentMachineDirectoryTree.setModel(self.CurrentDirectoryModel)
                 self.CurrentMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
-                self.CurrentMachineDirectoryTree.resizeColumnToContents(0)
+                self.CurrentMachineDirectoryTree.header().resizeSections(QHeaderView.ResizeMode.ResizeToContents)
                 self.CurrentDirEdit.setText(LocalPath)
                 self.CurrentDirUpOne.setEnabled(self.CurrentDirEdit.text() != '/')
             else:
@@ -639,11 +665,14 @@ class SSHClientMainWindow(QMainWindow):
                     if (not IsHiddenItem) or (IsHiddenItem and ShowHidden):
                         ItemName, ItemType, ItemSize, ItemModified = DirectoryItem["Item Name"], DirectoryItem["Item Type"], DirectoryItem["Item Size"], DirectoryItem["Item Date"]
                         if ItemName != None:
-                            DirectoryItemRow = [QStandardItem(ItemName), QStandardItem(ItemType), QStandardItem(ItemSize), QStandardItem(ItemModified)]
+                            ItemNameObject = QStandardItem(ItemName)
+                            ItemNameIcon = QIcon(self.ReturnFileIcon(ItemType))
+                            ItemNameObject.setIcon(ItemNameIcon)
+                            DirectoryItemRow = [ItemNameObject, QStandardItem(ItemType), QStandardItem(ItemSize), QStandardItem(ItemModified)]
                             self.ConnectedDirectoryModel.appendRow(DirectoryItemRow)
                 self.ConnectedMachineDirectoryTree.setModel(self.ConnectedDirectoryModel)
                 self.ConnectedMachineDirectoryTree.header().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
-                self.ConnectedMachineDirectoryTree.resizeColumnToContents(0)
+                self.ConnectedMachineDirectoryTree.header().resizeSections(QHeaderView.ResizeMode.ResizeToContents)
                 self.ConnectedDirEdit.setText(ServerPath)
                 self.ConnectedDirUpOne.setEnabled(self.ConnectedDirEdit.text() != '/')
             else:
@@ -689,8 +718,8 @@ class SSHClientMainWindow(QMainWindow):
             if not self.IncludesErrors(params):
                 logging.info(params["Message"])
                 if "Item Size" in params:
-                    self.StatusBarProgressBar.setRange(0, int(params["Item Size"]))
-                    self.StatusBarProgressBar.show()
+                    if self.StatusBarProgressBar.isHidden():
+                        self.StatusBarProgressBar.show()
             else:
                 raise params["Error Thrown"]
         except Exception as E:
@@ -700,7 +729,8 @@ class SSHClientMainWindow(QMainWindow):
     def FileTransferProgress(self, params):
         try:
             if not self.IncludesErrors(params):
-                self.StatusBarProgressBar.setValue(params["Current Bytes"])
+                ProgressPercentage = math.floor((params["Current Bytes"] / params["Total Bytes"]) * 100)
+                self.StatusBarProgressBar.setValue(ProgressPercentage)
             else:
                 raise params["Error Thrown"]
         except Exception as E:

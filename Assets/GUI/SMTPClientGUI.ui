@@ -204,6 +204,9 @@
         </item>
         <item>
          <widget class="QPushButton" name="E_ConnectionButton">
+          <property name="focusPolicy">
+           <enum>Qt::FocusPolicy::NoFocus</enum>
+          </property>
           <property name="text">
            <string>Connect</string>
           </property>
@@ -252,6 +255,9 @@
           </item>
           <item>
            <widget class="QPushButton" name="ConnectedDirUpOne">
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -263,6 +269,9 @@
           </item>
           <item>
            <widget class="QPushButton" name="ConnectedRefresh">
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -274,6 +283,9 @@
           </item>
           <item>
            <widget class="QPushButton" name="ConnectedHiddenToggleCheckbox">
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -327,6 +339,9 @@
           </item>
           <item>
            <widget class="QPushButton" name="CurrentDirUpOne">
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -338,6 +353,9 @@
           </item>
           <item>
            <widget class="QPushButton" name="CurrentRefresh">
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -349,6 +367,9 @@
           </item>
           <item>
            <widget class="QPushButton" name="CurrentHiddenToggleCheckbox">
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
             <property name="text">
              <string/>
             </property>
